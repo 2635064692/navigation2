@@ -1,0 +1,99 @@
+<!--
+  UWB 自动跟随行为树 — 多传感器安全防护
+
+  场景：低速移动机器人跟随 UWB 目标，具备 2D 激光雷达绕障与超声波紧急停障功能。
+
+  需要自定义的 BT 节点：
+    IsUltrasonicObstacleClose
+      - 类型：Condition（条件节点）
+      - 订阅超声波传感器 topic (sensor_msgs/Range)
+      - 当任一读数 < stop_distance 时返回 SUCCESS
+
+  外部依赖：
+    UWB 追踪节点持续向 GoalUpdater 的订阅 topic 发布动态目标位姿
+    (nav2_msgs/action/NavigateToPose goal 字段)。
+-->
+<root BTCPP_format="4" main_tree_to_execute="UWBFollowWithSafety">
+  <BehaviorTree ID="UWBFollowWithSafety">
+
+    <!-- 最外层：保持树永不退出，除非子节点返回 FAILURE（已被 ForceSuccess 兜底） -->
+    <KeepRunningUntilFailure>
+      <!-- 异常兜底：将任何 FAILURE 转为 SUCCESS，防止树终止 -->
+      <ForceSuccess>
+
+        <!-- 响应式序列：每次 tick 都从头重新评估安全条件 -->
+        <ReactiveSequence name="安全跟随序列">
+
+          <!-- 超声波安全门：检测到障碍物时，取反后 FAILURE → 阻断后续跟随，机器人停转 -->
+          <Inverter>
+            <!-- 超声波停障条件：距离 < 0.5m 时返回 SUCCESS → 机器人立即停止 -->
+            <IsUltrasonicObstacleClose
+              stop_distance="0.5"
+              topic_name="/ultrasonic_range"/>
+          </Inverter>
+
+          <!-- UWB 跟随主循环：依次执行选择器→规划→跟踪 -->
+          <PipelineSequence name="UWB跟随流水线">
+
+            <!-- 控制器选择器：支持运行时动态切换局部路径跟踪控制器 -->
+            <ControllerSelector
+              selected_controller="{selected_controller}"
+              default_controller="FollowPath"
+              topic_name="controller_selector"/>
+
+            <!-- 规划器选择器：支持运行时动态切换全局路径规划算法 -->
+            <PlannerSelector
+              selected_planner="{selected_planner}"
+              default_planner="GridBased"
+              topic_name="planner_selector"/>
+
+            <!-- 速度自适应重规划：低速时降低规划频率(0.5Hz)，速度越高规划越频繁(最高2.0Hz) -->
+            <SpeedController
+              min_rate="0.5"
+              max_rate="2.0"
+              min_speed="0.0"
+              max_speed="0.3">
+              <Sequence name="规划与截断">
+
+                <!-- UWB 动态目标更新：接收外部 UWB 追踪节点发布的目标位姿 -->
+                <GoalUpdater
+                  input_goal="{goal}"
+                  output_goal="{updated_goal}">
+                  <!-- 全局路径规划：根据 UWB 更新后的目标计算可行路径 -->
+                  <ComputePathToPose
+                    goal="{updated_goal}"
+                    path="{path}"
+                    planner_id="{selected_planner}"
+                    error_code_id="{compute_path_error_code}"
+                    error_msg="{compute_path_error_msg}"/>
+                </GoalUpdater>
+
+                <!-- 路径截断：仅保留前方 2.0m 路径，提升低速跟随的响应灵敏度 -->
+                <TruncatePath
+                  distance="2.0"
+                  input_path="{path}"
+                  output_path="{truncated_path}"/>
+
+              </Sequence>
+            </SpeedController>
+
+            <!-- 持续路径跟踪：到达截断路径终点后不会退出，等待下一轮重规划 -->
+            <!-- 2D 激光雷达绕障由 local costmap + 控制器(DWB/TEB/MPPI)内部完成 -->
+            <KeepRunningUntilFailure>
+              <FollowPath
+                path="{truncated_path}"
+                controller_id="{selected_controller}"
+                error_code_id="{follow_path_error_code}"
+                error_msg="{follow_path_error_msg}"
+                tracking_feedback="{tracking_feedback}"/>
+            </KeepRunningUntilFailure>
+
+          </PipelineSequence>
+
+        </ReactiveSequence>
+
+      </ForceSuccess>
+    </KeepRunningUntilFailure>
+
+  </BehaviorTree>
+</root>

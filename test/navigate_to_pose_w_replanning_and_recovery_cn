@@ -1,0 +1,79 @@
+digraph {
+	8671544141219 [label="导航至目标点_重规划与恢复" shape=box]
+	8671544141229 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>RecoveryNode</i></td></tr><tr><td align='text'><b>导航恢复（最多6次）</b></td></tr><tr><td align='left'><sub>number_of_retries=6</sub></td></tr><tr><td align='left'><sub>name=导航恢复（最多6次）</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141219 -> 8671544141229
+	8671544141239 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>PipelineSequence</i></td></tr><tr><td align='text'><b>导航流水线</b></td></tr><tr><td align='left'><sub>name=导航流水线</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141229 -> 8671544141239
+	8671544141274 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ProgressCheckerSelector</i></td></tr><tr><td align='text'><b>进度检查器选择</b></td></tr><tr><td align='left'><sub>selected_progress_checker={selected_progress_checker}</sub></td></tr><tr><td align='left'><sub>default_progress_checker=progress_checker</sub></td></tr><tr><td align='left'><sub>topic_name=progress_checker_selector</sub></td></tr><tr><td align='left'><sub>name=进度检查器选择</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141239 -> 8671544141274
+	8671544141309 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>GoalCheckerSelector</i></td></tr><tr><td align='text'><b>目标检查器选择</b></td></tr><tr><td align='left'><sub>selected_goal_checker={selected_goal_checker}</sub></td></tr><tr><td align='left'><sub>default_goal_checker=general_goal_checker</sub></td></tr><tr><td align='left'><sub>topic_name=goal_checker_selector</sub></td></tr><tr><td align='left'><sub>name=目标检查器选择</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141239 -> 8671544141309
+	8671544141339 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>PathHandlerSelector</i></td></tr><tr><td align='text'><b>路径处理器选择</b></td></tr><tr><td align='left'><sub>selected_path_handler={selected_path_handler}</sub></td></tr><tr><td align='left'><sub>default_path_handler=PathHandler</sub></td></tr><tr><td align='left'><sub>topic_name=path_handler_selector</sub></td></tr><tr><td align='left'><sub>name=路径处理器选择</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141239 -> 8671544141339
+	8671544141369 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ControllerSelector</i></td></tr><tr><td align='text'><b>控制器选择</b></td></tr><tr><td align='left'><sub>selected_controller={selected_controller}</sub></td></tr><tr><td align='left'><sub>default_controller=FollowPath</sub></td></tr><tr><td align='left'><sub>topic_name=controller_selector</sub></td></tr><tr><td align='left'><sub>name=控制器选择</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141239 -> 8671544141369
+	8671544141389 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>PlannerSelector</i></td></tr><tr><td align='text'><b>规划器选择</b></td></tr><tr><td align='left'><sub>selected_planner={selected_planner}</sub></td></tr><tr><td align='left'><sub>default_planner=GridBased</sub></td></tr><tr><td align='left'><sub>topic_name=planner_selector</sub></td></tr><tr><td align='left'><sub>name=规划器选择</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141239 -> 8671544141389
+	8671544141394 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>RateController</i></td></tr><tr><td align='text'><b>1Hz频率控制</b></td></tr><tr><td align='left'><sub>hz=1.0</sub></td></tr><tr><td align='left'><sub>name=1Hz频率控制</sub></td></tr></table> > color=darkorange1 shape=box style=filled]
+	8671544141239 -> 8671544141394
+	8671544141399 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>RecoveryNode</i></td></tr><tr><td align='text'><b>路径规划恢复</b></td></tr><tr><td align='left'><sub>number_of_retries=1</sub></td></tr><tr><td align='left'><sub>name=路径规划恢复</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141394 -> 8671544141399
+	8671544141404 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Fallback</i></td></tr><tr><td align='text'><b>是否需要重规划</b></td></tr><tr><td align='left'><sub>name=是否需要重规划</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141399 -> 8671544141404
+	8671544141414 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ReactiveSequence</i></td></tr><tr><td align='text'><b>检查是否需要新路径</b></td></tr><tr><td align='left'><sub>name=检查是否需要新路径</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141404 -> 8671544141414
+	8671544141429 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Inverter</i></td></tr><tr><td align='text'><b>取反</b></td></tr><tr><td align='left'><sub>name=取反</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141414 -> 8671544141429
+	8671544141444 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>GlobalUpdatedGoal</i></td></tr><tr><td align='text'><b>全局目标已更新？</b></td></tr><tr><td align='left'><sub>name=全局目标已更新？</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141429 -> 8671544141444
+	8671544141474 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>IsGoalNearby</i></td></tr><tr><td align='text'><b>目标是否在附近？</b></td></tr><tr><td align='left'><sub>path={path}</sub></td></tr><tr><td align='left'><sub>proximity_threshold=4.0</sub></td></tr><tr><td align='left'><sub>max_robot_pose_search_dist=1.5</sub></td></tr><tr><td align='left'><sub>name=目标是否在附近？</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141414 -> 8671544141474
+	8671544141509 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>TruncatePathLocal</i></td></tr><tr><td align='text'><b>截取剩余路径</b></td></tr><tr><td align='left'><sub>input_path={path}</sub></td></tr><tr><td align='left'><sub>output_path={remaining_path}</sub></td></tr><tr><td align='left'><sub>distance_forward=-1</sub></td></tr><tr><td align='left'><sub>distance_backward=0.0</sub></td></tr><tr><td align='left'><sub>name=截取剩余路径</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141414 -> 8671544141509
+	8671544141529 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ValidatePath</i></td></tr><tr><td align='text'><b>验证路径有效性</b></td></tr><tr><td align='left'><sub>path={remaining_path}</sub></td></tr><tr><td align='left'><sub>name=验证路径有效性</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141414 -> 8671544141529
+	8671544141554 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ComputePathToPose</i></td></tr><tr><td align='text'><b>计算全局路径</b></td></tr><tr><td align='left'><sub>goal={goal}</sub></td></tr><tr><td align='left'><sub>path={path}</sub></td></tr><tr><td align='left'><sub>planner_id={selected_planner}</sub></td></tr><tr><td align='left'><sub>error_code_id={compute_path_error_code}</sub></td></tr><tr><td align='left'><sub>error_msg={compute_path_error_msg}</sub></td></tr><tr><td align='left'><sub>name=计算全局路径</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141404 -> 8671544141554
+	8671544141559 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Sequence</i></td></tr><tr><td align='text'><b>规划恢复动作</b></td></tr><tr><td align='left'><sub>name=规划恢复动作</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141399 -> 8671544141559
+	8671544141574 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>WouldAPlannerRecoveryHelp</i></td></tr><tr><td align='text'><b>清除代价地图能修复规划吗？</b></td></tr><tr><td align='left'><sub>error_code={compute_path_error_code}</sub></td></tr><tr><td align='left'><sub>name=清除代价地图能修复规划吗？</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141559 -> 8671544141574
+	8671544141584 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ClearEntireCostmap</i></td></tr><tr><td align='text'><b>清除全局代价地图</b></td></tr><tr><td align='left'><sub>name=清除全局代价地图</sub></td></tr><tr><td align='left'><sub>service_name=global_costmap/clear_entirely_global_costmap</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141559 -> 8671544141584
+	8671544141589 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>RecoveryNode</i></td></tr><tr><td align='text'><b>路径跟踪恢复</b></td></tr><tr><td align='left'><sub>number_of_retries=1</sub></td></tr><tr><td align='left'><sub>name=路径跟踪恢复</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141239 -> 8671544141589
+	8671544141619 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>FollowPath</i></td></tr><tr><td align='text'><b>跟踪路径</b></td></tr><tr><td align='left'><sub>path={path}</sub></td></tr><tr><td align='left'><sub>controller_id={selected_controller}</sub></td></tr><tr><td align='left'><sub>error_code_id={follow_path_error_code}</sub></td></tr><tr><td align='left'><sub>error_msg={follow_path_error_msg}</sub></td></tr><tr><td align='left'><sub>tracking_feedback={tracking_feedback}</sub></td></tr><tr><td align='left'><sub>name=跟踪路径</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141589 -> 8671544141619
+	8671544141624 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Sequence</i></td></tr><tr><td align='text'><b>跟踪恢复动作</b></td></tr><tr><td align='left'><sub>name=跟踪恢复动作</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141589 -> 8671544141624
+	8671544141639 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>WouldAControllerRecoveryHelp</i></td></tr><tr><td align='text'><b>清除代价地图能修复跟踪吗？</b></td></tr><tr><td align='left'><sub>error_code={follow_path_error_code}</sub></td></tr><tr><td align='left'><sub>name=清除代价地图能修复跟踪吗？</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141624 -> 8671544141639
+	8671544141644 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ClearEntireCostmap</i></td></tr><tr><td align='text'><b>清除局部代价地图</b></td></tr><tr><td align='left'><sub>name=清除局部代价地图</sub></td></tr><tr><td align='left'><sub>service_name=local_costmap/clear_entirely_local_costmap</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141624 -> 8671544141644
+	8671544141649 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Sequence</i></td></tr><tr><td align='text'><b>外层恢复子树</b></td></tr><tr><td align='left'><sub>name=外层恢复子树</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141229 -> 8671544141649
+	8671544141654 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Fallback</i></td></tr><tr><td align='text'><b>判断问题来源</b></td></tr><tr><td align='left'><sub>name=判断问题来源</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141649 -> 8671544141654
+	8671544141664 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>WouldAControllerRecoveryHelp</i></td></tr><tr><td align='text'><b>控制器问题？</b></td></tr><tr><td align='left'><sub>error_code={follow_path_error_code}</sub></td></tr><tr><td align='left'><sub>name=控制器问题？</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141654 -> 8671544141664
+	8671544141674 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>WouldAPlannerRecoveryHelp</i></td></tr><tr><td align='text'><b>规划器问题？</b></td></tr><tr><td align='left'><sub>error_code={compute_path_error_code}</sub></td></tr><tr><td align='left'><sub>name=规划器问题？</sub></td></tr></table> > color=grey shape=box style=filled]
+	8671544141654 -> 8671544141674
+	8671544141684 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ReactiveFallback</i></td></tr><tr><td align='text'><b>恢复选择器</b></td></tr><tr><td align='left'><sub>name=恢复选择器</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141649 -> 8671544141684
+	8671544141689 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>GoalUpdated</i></td></tr><tr><td align='text'><b>目标已更新？</b></td></tr><tr><td align='left'><sub>name=目标已更新？</sub></td></tr></table> > color=yellow2 shape=box style=filled]
+	8671544141684 -> 8671544141689
+	8671544141694 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>RoundRobin</i></td></tr><tr><td align='text'><b>轮转恢复动作</b></td></tr><tr><td align='left'><sub>name=轮转恢复动作</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141684 -> 8671544141694
+	8671544141699 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Sequence</i></td></tr><tr><td align='text'><b>清除代价地图</b></td></tr><tr><td align='left'><sub>name=清除代价地图</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8671544141694 -> 8671544141699
+	8671544141704 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ClearEntireCostmap</i></td></tr><tr><td align='text'><b>清除局部代价地图</b></td></tr><tr><td align='left'><sub>name=清除局部代价地图</sub></td></tr><tr><td align='left'><sub>service_name=local_costmap/clear_entirely_local_costmap</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141699 -> 8671544141704
+	8671544141709 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ClearEntireCostmap</i></td></tr><tr><td align='text'><b>清除全局代价地图</b></td></tr><tr><td align='left'><sub>name=清除全局代价地图</sub></td></tr><tr><td align='left'><sub>service_name=global_costmap/clear_entirely_global_costmap</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141699 -> 8671544141709
+	8671544141724 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Spin</i></td></tr><tr><td align='text'><b>原地旋转90°</b></td></tr><tr><td align='left'><sub>spin_dist=1.57</sub></td></tr><tr><td align='left'><sub>error_code_id={spin_error_code}</sub></td></tr><tr><td align='left'><sub>error_msg={spin_error_msg}</sub></td></tr><tr><td align='left'><sub>name=原地旋转90°</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141694 -> 8671544141724
+	8671544141739 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Wait</i></td></tr><tr><td align='text'><b>等待5秒</b></td></tr><tr><td align='left'><sub>wait_duration=5.0</sub></td></tr><tr><td align='left'><sub>error_code_id={wait_error_code}</sub></td></tr><tr><td align='left'><sub>error_msg={wait_error_msg}</sub></td></tr><tr><td align='left'><sub>name=等待5秒</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141694 -> 8671544141739
+	8671544141754 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>BackUp</i></td></tr><tr><td align='text'><b>后退0.3米</b></td></tr><tr><td align='left'><sub>backup_dist=0.30</sub></td></tr><tr><td align='left'><sub>backup_speed=0.15</sub></td></tr><tr><td align='left'><sub>error_code_id={backup_error_code}</sub></td></tr><tr><td align='left'><sub>error_msg={backup_error_msg}</sub></td></tr><tr><td align='left'><sub>name=后退0.3米</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8671544141694 -> 8671544141754
+}

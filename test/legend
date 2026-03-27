@@ -1,0 +1,8 @@
+digraph {
+	graph [rankdir=LR]
+	label=Legend
+	Unknown [color=grey shape=box style=filled]
+	Action [label="Action Node" color=cornflowerblue shape=box style=filled]
+	Condition [label="Condition Node" color=yellow2 shape=box style=filled]
+	Control [label="Control Node" color=chartreuse4 shape=box style=filled]
+}

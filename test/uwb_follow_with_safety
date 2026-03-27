@@ -1,0 +1,33 @@
+digraph {
+	8415864697301 [label=UWBFollowWithSafety shape=box]
+	8415864697311 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>KeepRunningUntilFailure</i></td></tr></table> > color=grey shape=box style=filled]
+	8415864697301 -> 8415864697311
+	8415864697316 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ForceSuccess</i></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8415864697311 -> 8415864697316
+	8415864697326 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ReactiveSequence</i></td></tr><tr><td align='text'><b>安全跟随序列</b></td></tr><tr><td align='left'><sub>name=安全跟随序列</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8415864697316 -> 8415864697326
+	8415864697331 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Inverter</i></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8415864697326 -> 8415864697331
+	8415864697346 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>IsUltrasonicObstacleClose</i></td></tr><tr><td align='left'><sub>stop_distance=0.5</sub></td></tr><tr><td align='left'><sub>topic_name=/ultrasonic_range</sub></td></tr></table> > color=grey shape=box style=filled]
+	8415864697331 -> 8415864697346
+	8415864697356 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>PipelineSequence</i></td></tr><tr><td align='text'><b>UWB跟随流水线</b></td></tr><tr><td align='left'><sub>name=UWB跟随流水线</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8415864697326 -> 8415864697356
+	8415864697386 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ControllerSelector</i></td></tr><tr><td align='left'><sub>selected_controller={selected_controller}</sub></td></tr><tr><td align='left'><sub>default_controller=FollowPath</sub></td></tr><tr><td align='left'><sub>topic_name=controller_selector</sub></td></tr></table> > color=grey shape=box style=filled]
+	8415864697356 -> 8415864697386
+	8415864697406 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>PlannerSelector</i></td></tr><tr><td align='left'><sub>selected_planner={selected_planner}</sub></td></tr><tr><td align='left'><sub>default_planner=GridBased</sub></td></tr><tr><td align='left'><sub>topic_name=planner_selector</sub></td></tr></table> > color=grey shape=box style=filled]
+	8415864697356 -> 8415864697406
+	8415864697411 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>SpeedController</i></td></tr><tr><td align='left'><sub>min_rate=0.5</sub></td></tr><tr><td align='left'><sub>max_rate=2.0</sub></td></tr><tr><td align='left'><sub>min_speed=0.0</sub></td></tr><tr><td align='left'><sub>max_speed=0.3</sub></td></tr></table> > color=darkorange1 shape=box style=filled]
+	8415864697356 -> 8415864697411
+	8415864697416 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>Sequence</i></td></tr><tr><td align='text'><b>规划与截断</b></td></tr><tr><td align='left'><sub>name=规划与截断</sub></td></tr></table> > color=chartreuse4 shape=box style=filled]
+	8415864697411 -> 8415864697416
+	8415864697431 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>GoalUpdater</i></td></tr><tr><td align='left'><sub>input_goal={goal}</sub></td></tr><tr><td align='left'><sub>output_goal={updated_goal}</sub></td></tr></table> > color=grey shape=box style=filled]
+	8415864697416 -> 8415864697431
+	8415864697466 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>ComputePathToPose</i></td></tr><tr><td align='left'><sub>goal={updated_goal}</sub></td></tr><tr><td align='left'><sub>path={path}</sub></td></tr><tr><td align='left'><sub>planner_id={selected_planner}</sub></td></tr><tr><td align='left'><sub>error_code_id={compute_path_error_code}</sub></td></tr><tr><td align='left'><sub>error_msg={compute_path_error_msg}</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8415864697431 -> 8415864697466
+	8415864697491 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>TruncatePath</i></td></tr><tr><td align='left'><sub>distance=2.0</sub></td></tr><tr><td align='left'><sub>input_path={path}</sub></td></tr><tr><td align='left'><sub>output_path={truncated_path}</sub></td></tr></table> > color=grey shape=box style=filled]
+	8415864697416 -> 8415864697491
+	8415864697496 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>KeepRunningUntilFailure</i></td></tr></table> > color=grey shape=box style=filled]
+	8415864697356 -> 8415864697496
+	8415864697531 [label=< <table border='0' cellspacing='0' cellpadding='0'><tr><td align='text'><i>FollowPath</i></td></tr><tr><td align='left'><sub>path={truncated_path}</sub></td></tr><tr><td align='left'><sub>controller_id={selected_controller}</sub></td></tr><tr><td align='left'><sub>error_code_id={follow_path_error_code}</sub></td></tr><tr><td align='left'><sub>error_msg={follow_path_error_msg}</sub></td></tr><tr><td align='left'><sub>tracking_feedback={tracking_feedback}</sub></td></tr></table> > color=cornflowerblue shape=box style=filled]
+	8415864697496 -> 8415864697531
+}
