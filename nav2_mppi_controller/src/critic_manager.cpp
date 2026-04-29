@@ -67,11 +67,56 @@ std::string CriticManager::getFullName(const std::string & name)
 void CriticManager::evalTrajectoriesScores(
   CriticData & data) const
 {
+  const size_t batch = data.costs.shape(0);
+  std::vector<std::pair<std::string, xt::xtensor<float, 1>>> per_critic_costs;
+  per_critic_costs.reserve(critics_.size());
+
   for (size_t q = 0; q < critics_.size(); q++) {
     if (data.fail_flag) {
       break;
     }
+    xt::xtensor<float, 1> costs_before = data.costs;
     critics_[q]->score(data);
+    per_critic_costs.emplace_back(
+      critics_[q]->getName(),
+      data.costs - costs_before);
+  }
+
+  if (!per_critic_costs.empty() && batch > 0) {
+    size_t best = 0;
+    for (size_t i = 1; i < batch; ++i) {
+      if (data.costs(i) < data.costs(best)) { best = i; }
+    }
+    float total = data.costs(best);
+    std::string msg = "[CriticManager] Optimal traj#" + std::to_string(best) +
+      " | total=" + std::to_string(total);
+    for (auto & [name, costs] : per_critic_costs) {
+      msg += "\n  " + name + ": " + std::to_string(costs(best));
+    }
+    RCLCPP_INFO(logger_, "%s", msg.c_str());
+  }
+}
+
+void CriticManager::logObstacleCriticScores(
+  CriticData & data, const std::string & label) const
+{
+  for (const auto & critic : critics_) {
+    const std::string critic_name = critic->getName();
+    if (critic_name.find("ObstaclesCritic") == std::string::npos) {
+      continue;
+    }
+
+    xt::xtensor<float, 1> costs_before = data.costs;
+    const bool fail_before = data.fail_flag;
+    critic->score(data);
+    const float cost = (data.costs - costs_before)(0);
+
+    RCLCPP_INFO(
+      logger_, "[CriticManager] %s %s: %.6f%s",
+      label.c_str(), critic_name.c_str(), static_cast<double>(cost),
+      data.fail_flag ? " | fail=true" : "");
+
+    data.fail_flag = fail_before;
   }
 }
 

@@ -69,6 +69,13 @@ public:
     */
   void evalTrajectoriesScores(CriticData & data) const;
 
+  /**
+    * @brief Re-score one final trajectory with loaded obstacle critics for diagnostics
+    * @param data Single-trajectory critic data to score
+    * @param label Log label describing the trajectory source
+    */
+  void logObstacleCriticScores(CriticData & data, const std::string & label) const;
+
 protected:
   /**
     * @brief Get parameters (critics to load)

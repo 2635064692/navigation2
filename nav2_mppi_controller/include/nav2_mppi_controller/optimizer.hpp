@@ -210,6 +210,11 @@ protected:
   void updateControlSequence();
 
   /**
+   * @brief Log obstacle critic score for the final optimized control sequence
+   */
+  void logOptimizedObstacleCriticScores();
+
+  /**
    * @brief Convert control sequence to a twist commant
    * @param stamp Timestamp to use
    * @return TwistStamped of command to send to robot base

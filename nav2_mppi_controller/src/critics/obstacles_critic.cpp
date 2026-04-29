@@ -183,10 +183,15 @@ void ObstaclesCritic::score(CriticData & data)
     raw_cost[i] = trajectory_collide ? collision_cost_ : traj_cost;
   }
 
-  data.costs += xt::pow(
+  auto && obstacle_cost = xt::pow(
     (critical_weight_ * raw_cost) +
     (repulsion_weight_ * repulsive_cost / traj_len),
     power_);
+  RCLCPP_INFO(logger_, "ObstaclesCritic cost: min=%.2f max=%.2f mean=%.2f",
+    static_cast<double>(xt::amin(obstacle_cost, immediate)()),
+    static_cast<double>(xt::amax(obstacle_cost, immediate)()),
+    static_cast<double>(xt::mean(obstacle_cost, immediate)()));
+  data.costs += obstacle_cost;
   data.fail_flag = all_trajectories_collide;
 }
 

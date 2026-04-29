@@ -158,6 +158,7 @@ void Optimizer::optimize()
     generateNoisedTrajectories();
     critic_manager_.evalTrajectoriesScores(critics_data_);
     updateControlSequence();
+    logOptimizedObstacleCriticScores();
   }
 }
 
@@ -385,6 +386,36 @@ void Optimizer::updateControlSequence()
   }
 
   applyControlSequenceConstraints();
+}
+
+void Optimizer::logOptimizedObstacleCriticScores()
+{
+  models::State optimized_state;
+  optimized_state.reset(1, settings_.time_steps);
+  optimized_state.pose = state_.pose;
+  optimized_state.speed = state_.speed;
+
+  xt::noalias(xt::view(optimized_state.vx, 0, xt::all())) = control_sequence_.vx;
+  xt::noalias(xt::view(optimized_state.wz, 0, xt::all())) = control_sequence_.wz;
+  xt::noalias(xt::view(optimized_state.cvx, 0, xt::all())) = control_sequence_.vx;
+  xt::noalias(xt::view(optimized_state.cwz, 0, xt::all())) = control_sequence_.wz;
+
+  if (isHolonomic()) {
+    xt::noalias(xt::view(optimized_state.vy, 0, xt::all())) = control_sequence_.vy;
+    xt::noalias(xt::view(optimized_state.cvy, 0, xt::all())) = control_sequence_.vy;
+  }
+
+  models::Trajectories optimized_trajectory;
+  optimized_trajectory.reset(1, settings_.time_steps);
+  integrateStateVelocities(optimized_trajectory, optimized_state);
+
+  xt::xtensor<float, 1> final_cost = xt::zeros<float>({1});
+  CriticData optimized_data =
+  {optimized_state, optimized_trajectory, path_, final_cost, settings_.model_dt, false,
+    critics_data_.goal_checker, motion_model_, std::nullopt, std::nullopt};
+
+  critic_manager_.logObstacleCriticScores(
+    optimized_data, "Final optimized trajectory");
 }
 
 geometry_msgs::msg::TwistStamped Optimizer::getControlFromSequenceAsTwist(
