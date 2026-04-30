@@ -94,6 +94,23 @@ void CriticManager::evalTrajectoriesScores(
       msg += "\n  " + name + ": " + std::to_string(costs(best));
     }
     RCLCPP_INFO(logger_, "%s", msg.c_str());
+
+    for (auto & [name, costs] : per_critic_costs) {
+      float min_cost = costs(0);
+      float max_cost = costs(0);
+      double sum_cost = 0.0;
+      for (size_t i = 0; i < batch; ++i) {
+        min_cost = std::min(min_cost, costs(i));
+        max_cost = std::max(max_cost, costs(i));
+        sum_cost += costs(i);
+      }
+
+      RCLCPP_INFO(
+        logger_,
+        "[CriticStats] %s: min=%.6f max=%.6f mean=%.6f best=%.6f",
+        name.c_str(), static_cast<double>(min_cost), static_cast<double>(max_cost),
+        sum_cost / static_cast<double>(batch), static_cast<double>(costs(best)));
+    }
   }
 }
 

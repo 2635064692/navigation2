@@ -377,6 +377,22 @@ void Optimizer::updateControlSequence()
   auto && costs_normalized = costs_ - xt::amin(costs_, immediate);
   auto && exponents = xt::eval(xt::exp(-1 / settings_.temperature * costs_normalized));
   auto && softmaxes = xt::eval(exponents / xt::sum(exponents, immediate));
+
+  size_t best = 0;
+  for (size_t i = 1; i < costs_.shape(0); ++i) {
+    if (costs_(i) < costs_(best)) {
+      best = i;
+    }
+  }
+  const double weights_sum_sq = static_cast<double>(xt::sum(softmaxes * softmaxes, immediate)());
+  const double effective_samples = weights_sum_sq > 0.0 ? 1.0 / weights_sum_sq : 0.0;
+  RCLCPP_INFO(
+    logger_,
+    "[MPPIWeights] best_traj=%zu best_total=%.6f weight_best=%.6f "
+    "effective_samples=%.6f temperature=%.6f",
+    best, static_cast<double>(costs_(best)), static_cast<double>(softmaxes(best)),
+    effective_samples, static_cast<double>(settings_.temperature));
+
   auto && softmaxes_extened = xt::eval(xt::view(softmaxes, xt::all(), xt::newaxis()));
 
   xt::noalias(control_sequence_.vx) = xt::sum(state_.cvx * softmaxes_extened, 0, immediate);
