@@ -259,6 +259,10 @@ bool CollisionMonitor::configurePolygons(
         polygons_.push_back(
           std::make_shared<Circle>(
             node, polygon_name, tf_buffer_, base_frame_id, transform_tolerance));
+      } else if (polygon_type == "velocity_polygon") {
+        polygons_.push_back(
+          std::make_shared<VelocityPolygon>(
+            node, polygon_name, tf_buffer_, base_frame_id, transform_tolerance));
       } else {  // Error if something else
         RCLCPP_ERROR(
           get_logger(),
@@ -408,6 +412,8 @@ bool CollisionMonitor::processStopSlowdown(
   const Velocity & velocity,
   Action & robot_action) const
 {
+  polygon->updatePolygon(velocity);
+
   if (polygon->getPointsInside(collision_points) > polygon->getMaxPoints()) {
     if (polygon->getActionType() == STOP) {
       // Setting up zero velocity for STOP model
@@ -437,7 +443,7 @@ bool CollisionMonitor::processApproach(
   const Velocity & velocity,
   Action & robot_action) const
 {
-  polygon->updatePolygon();
+  polygon->updatePolygon(velocity);
 
   // Obtain time before a collision
   const double collision_time = polygon->getCollisionTime(collision_points, velocity);

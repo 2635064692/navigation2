@@ -326,7 +326,7 @@ bool Tester::waitFootprint(
 {
   rclcpp::Time start_time = test_node_->now();
   while (rclcpp::ok() && test_node_->now() - start_time <= rclcpp::Duration(timeout)) {
-    polygon_->updatePolygon();
+    polygon_->updatePolygon({0.0, 0.0, 0.0});
     polygon_->getPolygon(footprint);
     if (footprint.size() > 0) {
       return true;
