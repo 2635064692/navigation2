@@ -413,25 +413,32 @@ DWBLocalPlanner::coreScoringAlgorithm(
   }
 
   if (best.total >= 0) {
-    std::string msg = "[DWBScoring] Best traj | total=" + std::to_string(best.total);
-    for (const auto & cs : best.scores) {
-      if (cs.scale == 0.0) { continue; }
-      msg += "\n  " + cs.name + ": raw=" + std::to_string(cs.raw_score) +
-             " scale=" + std::to_string(cs.scale) +
-             " contrib=" + std::to_string(cs.raw_score * cs.scale);
-    }
-    RCLCPP_INFO(logger_, "%s", msg.c_str());
-
-    for (const auto & [name, entry] : critic_stats) {
-      double mean = entry.count > 0 ? entry.sum / static_cast<double>(entry.count) : 0.0;
-      double best_raw = 0.0;
+    auto current_time = clock_->now();
+    auto time_since_last_log = (current_time - last_critic_stats_log_time_).seconds();
+    
+    if (time_since_last_log >= 5.0) {
+      last_critic_stats_log_time_ = current_time;
+      
+      std::string msg = "[DWBScoring] Best traj | total=" + std::to_string(best.total);
       for (const auto & cs : best.scores) {
-        if (cs.name == name) { best_raw = cs.raw_score; break; }
+        if (cs.scale == 0.0) { continue; }
+        msg += "\n  " + cs.name + ": raw=" + std::to_string(cs.raw_score) +
+               " scale=" + std::to_string(cs.scale) +
+               " contrib=" + std::to_string(cs.raw_score * cs.scale);
       }
-      RCLCPP_INFO(
-        logger_,
-        "[CriticStats] %s: min=%.6f max=%.6f mean=%.6f best=%.6f",
-        name.c_str(), entry.min, entry.max, mean, best_raw);
+      RCLCPP_INFO(logger_, "%s", msg.c_str());
+
+      for (const auto & [name, entry] : critic_stats) {
+        double mean = entry.count > 0 ? entry.sum / static_cast<double>(entry.count) : 0.0;
+        double best_raw = 0.0;
+        for (const auto & cs : best.scores) {
+          if (cs.name == name) { best_raw = cs.raw_score; break; }
+        }
+        RCLCPP_INFO(
+          logger_,
+          "[CriticStats] %s: min=%.6f max=%.6f mean=%.6f best=%.6f",
+          name.c_str(), entry.min, entry.max, mean, best_raw);
+      }
     }
   }
 

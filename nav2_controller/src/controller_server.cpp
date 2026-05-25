@@ -254,7 +254,7 @@ ControllerServer::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
    * via rcl preshutdown cb. Despite the rclcpp docs saying on_shutdown callbacks fire
    * in the order added, the preshutdown callbacks clearly don't per se, due to using an
    * unordered_set iteration. Once this issue is resolved, we can maybe make a stronger
-   * ordering assumption: https://github.com/ros2/rclcpp/issues/2096
+   * ordering assumption: https://github.com/rclcpp/rclcpp/issues/2096
    */
   costmap_ros_->deactivate();
 
@@ -366,6 +366,7 @@ void ControllerServer::computeControl()
     if (findControllerId(c_name, current_controller)) {
       current_controller_ = current_controller;
     } else {
+      RCLCPP_ERROR(get_logger(), "[ABORT_TRACE] Path-1: controller_id '%s' not found, terminating", c_name.c_str());
       action_server_->terminate_current();
       return;
     }
@@ -375,6 +376,7 @@ void ControllerServer::computeControl()
     if (findGoalCheckerId(gc_name, current_goal_checker)) {
       current_goal_checker_ = current_goal_checker;
     } else {
+      RCLCPP_ERROR(get_logger(), "[ABORT_TRACE] Path-2: goal_checker_id '%s' not found, terminating", gc_name.c_str());
       action_server_->terminate_current();
       return;
     }
@@ -386,7 +388,7 @@ void ControllerServer::computeControl()
     rclcpp::WallRate loop_rate(controller_frequency_);
     while (rclcpp::ok()) {
       if (action_server_ == nullptr || !action_server_->is_server_active()) {
-        RCLCPP_DEBUG(get_logger(), "Action server unavailable or inactive. Stopping.");
+        RCLCPP_WARN(get_logger(), "[ABORT_TRACE] Path-9: action server inactive, exiting computeControl");
         return;
       }
 
@@ -419,12 +421,12 @@ void ControllerServer::computeControl()
       }
     }
   } catch (nav2_core::PlannerException & e) {
-    RCLCPP_ERROR(this->get_logger(), "%s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "[ABORT_TRACE] Path-3/4/5: PlannerException: %s", e.what());
     publishZeroVelocity();
     action_server_->terminate_current();
     return;
   } catch (std::exception & e) {
-    RCLCPP_ERROR(this->get_logger(), "%s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "[ABORT_TRACE] Path-6/7/8: std::exception: %s", e.what());
     publishZeroVelocity();
     std::shared_ptr<Action::Result> result = std::make_shared<Action::Result>();
     action_server_->terminate_current(result);
@@ -482,7 +484,7 @@ void ControllerServer::computeAndPublishVelocity()
     cmd_vel_2d =
       controllers_[current_controller_]->computeVelocityCommands(
       pose,
-      nav_2d_utils::twist2Dto3D(twist),
+      nav_2d_utils::twist2dto3D(twist),
       goal_checkers_[current_goal_checker_].get());
     last_valid_cmd_time_ = now();
   } catch (nav2_core::PlannerException & e) {
@@ -496,55 +498,61 @@ void ControllerServer::computeAndPublishVelocity()
       cmd_vel_2d.twist.linear.z = 0;
       cmd_vel_2d.header.frame_id = costmap_ros_->getBaseFrameID();
       cmd_vel_2d.header.stamp = now();
-      if ((now() - last_valid_cmd_time_).seconds() > failure_tolerance_ &&
-        failure_tolerance_ != -1.0)
-      {
-        throw nav2_core::PlannerException("Controller patience exceeded");
+      if ((now() - last_valid_cmd_time_).seconds() >= failure_tolerance_) {
+        RCLCPP_ERROR(this->get_logger(),
+          "[ABORT_TRACE] Path-6: Controller PlannerException exceeded failure_tolerance (%.1fs): %s",
+          failure_tolerance_, e.what());
+        throw nav2_core::ControllerException(e.what());
       }
     } else {
-      throw nav2_core::PlannerException(e.what());
+      RCLCPP_ERROR(this->get_logger(),
+        "[ABORT_TRACE] Path-6: Controller PlannerException (no tolerance): %s", e.what());
+      throw nav2_core::ControllerException(e.what());
+    }
+  } catch (nav2_core::ControllerException & e) {
+    if (failure_tolerance_ > 0 || failure_tolerance_ == -1.0) {
+      RCLCPP_WARN(this->get_logger(), "%s", e.what());
+      cmd_vel_2d.twist.angular.x = 0;
+      cmd_vel_2d.twist.angular.y = 0;
+      cmd_vel_2d.twist.angular.z = 0;
+      cmd_vel_2d.twist.linear.x = 0;
+      cmd_vel_2d.twist.linear.y = 0;
+      cmd_vel_2d.twist.linear.z = 0;
+      cmd_vel_2d.header.frame_id = costmap_ros_->getBaseFrameID();
+      cmd_vel_2d.header.stamp = now();
+      if ((now() - last_valid_cmd_time_).seconds() >= failure_tolerance_) {
+        RCLCPP_ERROR(this->get_logger(),
+          "[ABORT_TRACE] Path-7: ControllerException exceeded failure_tolerance (%.1fs): %s",
+          failure_tolerance_, e.what());
+        throw nav2_core::ControllerException(e.what());
+      }
+    } else {
+      RCLCPP_ERROR(this->get_logger(),
+        "[ABORT_TRACE] Path-7: ControllerException (no tolerance): %s", e.what());
+      throw nav2_core::ControllerException(e.what());
     }
   }
 
-  std::shared_ptr<Action::Feedback> feedback = std::make_shared<Action::Feedback>();
-  feedback->speed = std::hypot(cmd_vel_2d.twist.linear.x, cmd_vel_2d.twist.linear.y);
+  std::shared_ptr<geometry_msgs::msg::Twist> twist_msg =
+    std::make_shared<geometry_msgs::msg::Twist>(cmd_vel_2d.twist);
 
-  // Find the closest pose to current pose on global path
-  nav_msgs::msg::Path & current_path = current_path_;
-  auto find_closest_pose_idx =
-    [&pose, &current_path]() {
-      size_t closest_pose_idx = 0;
-      double curr_min_dist = std::numeric_limits<double>::max();
-      for (size_t curr_idx = 0; curr_idx < current_path.poses.size(); ++curr_idx) {
-        double curr_dist = nav2_util::geometry_utils::euclidean_distance(
-          pose, current_path.poses[curr_idx]);
-        if (curr_dist < curr_min_dist) {
-          curr_min_dist = curr_dist;
-          closest_pose_idx = curr_idx;
-        }
-      }
-      return closest_pose_idx;
-    };
+  if (speed_limit_ > 0) {
+    limitTwist(twist_msg);
+  }
 
-  feedback->distance_to_goal =
-    nav2_util::geometry_utils::calculate_path_length(current_path_, find_closest_pose_idx());
-  action_server_->publish_feedback(feedback);
-
-  RCLCPP_DEBUG(get_logger(), "Publishing velocity at time %.2f", now().seconds());
-  publishVelocity(cmd_vel_2d);
+  vel_publisher_->publish(*twist_msg);
 }
 
 void ControllerServer::updateGlobalPath()
 {
-  if (action_server_->is_preempt_requested()) {
-    RCLCPP_INFO(get_logger(), "Passing new path to controller.");
+  if (action_server_->get_pending_goal() != nullptr) {
     auto goal = action_server_->accept_pending_goal();
     std::string current_controller;
     if (findControllerId(goal->controller_id, current_controller)) {
       current_controller_ = current_controller;
     } else {
-      RCLCPP_INFO(
-        get_logger(), "Terminating action, invalid controller %s requested.",
+      RCLCPP_ERROR(this->get_logger(),
+        "[ABORT_TRACE] Path-1(pending): controller_id '%s' not found in pending goal",
         goal->controller_id.c_str());
       action_server_->terminate_current();
       return;
@@ -553,36 +561,35 @@ void ControllerServer::updateGlobalPath()
     if (findGoalCheckerId(goal->goal_checker_id, current_goal_checker)) {
       current_goal_checker_ = current_goal_checker;
     } else {
-      RCLCPP_INFO(
-        get_logger(), "Terminating action, invalid goal checker %s requested.",
+      RCLCPP_ERROR(this->get_logger(),
+        "[ABORT_TRACE] Path-2(pending): goal_checker_id '%s' not found in pending goal",
         goal->goal_checker_id.c_str());
       action_server_->terminate_current();
       return;
     }
     setPlannerPath(goal->path);
+    progress_checker_->reset();
   }
 }
 
-void ControllerServer::publishVelocity(const geometry_msgs::msg::TwistStamped & velocity)
+void ControllerServer::setSpeedLimit(const double & speed_limit)
 {
-  auto cmd_vel = std::make_unique<geometry_msgs::msg::Twist>(velocity.twist);
-  if (vel_publisher_->is_activated() && vel_publisher_->get_subscription_count() > 0) {
-    vel_publisher_->publish(std::move(cmd_vel));
-  }
+  speed_limit_ = speed_limit;
 }
 
-void ControllerServer::publishZeroVelocity()
+double ControllerServer::getRobotPose(geometry_msgs::msg::PoseStamped & pose)
 {
-  geometry_msgs::msg::TwistStamped velocity;
-  velocity.twist.angular.x = 0;
-  velocity.twist.angular.y = 0;
-  velocity.twist.angular.z = 0;
-  velocity.twist.linear.x = 0;
-  velocity.twist.linear.y = 0;
-  velocity.twist.linear.z = 0;
-  velocity.header.frame_id = costmap_ros_->getBaseFrameID();
-  velocity.header.stamp = now();
-  publishVelocity(velocity);
+  geometry_msgs::msg::PoseStamped current_pose;
+  if (!nav_2d_utils::transformToGlobalFrame(
+      costmap_ros_->getTfBuffer(), costmap_ros_->getGlobalFrameID(),
+      current_pose, transform_tolerance_))
+  {
+    RCLCPP_ERROR(get_logger(), "[ABORT_TRACE] Path-4: Failed to get robot pose (TF transform failed)");
+    return false;
+  }
+
+  pose = current_pose;
+  return true;
 }
 
 bool ControllerServer::isGoalReached()
@@ -593,63 +600,66 @@ bool ControllerServer::isGoalReached()
     return false;
   }
 
-  nav_2d_msgs::msg::Twist2D twist = getThresholdedTwist(odom_sub_->getTwist());
-  geometry_msgs::msg::Twist velocity = nav_2d_utils::twist2Dto3D(twist);
+  // check if the robot has reached the goal pose based on the goal checker
+  if (goal_checkers_[current_goal_checker_]->isGoalReached(
+      pose.pose, end_pose_.pose, current_path_.header.frame_id))
+  {
+    return true;
+  }
 
-  geometry_msgs::msg::PoseStamped transformed_end_pose;
-  rclcpp::Duration tolerance(rclcpp::Duration::from_seconds(costmap_ros_->getTransformTolerance()));
-  nav_2d_utils::transformPose(
-    costmap_ros_->getTfBuffer(), costmap_ros_->getGlobalFrameID(),
-    end_pose_, transformed_end_pose, tolerance);
-
-  return goal_checkers_[current_goal_checker_]->isGoalReached(
-    pose.pose, transformed_end_pose.pose,
-    velocity);
+  return false;
 }
 
-bool ControllerServer::getRobotPose(geometry_msgs::msg::PoseStamped & pose)
+void ControllerServer::publishZeroVelocity()
 {
-  geometry_msgs::msg::PoseStamped current_pose;
-  if (!costmap_ros_->getRobotPose(current_pose)) {
-    return false;
+  auto cmd_vel = std::make_shared<geometry_msgs::msg::Twist>();
+  vel_publisher_->publish(*cmd_vel);
+}
+
+nav_2d_msgs::msg::Twist2D ControllerServer::getThresholdedTwist(
+  const nav_2d_msgs::msg::Twist2D & twist) const
+{
+  nav_2d_msgs::msg::Twist2D twist_thresholded = twist;
+  if (abs(twist.x) < min_x_velocity_threshold_) {
+    twist_thresholded.x = 0;
   }
-  pose = current_pose;
-  return true;
+  if (abs(twist.y) < min_y_velocity_threshold_) {
+    twist_thresholded.y = 0;
+  }
+  // threshold on rotational velocity
+  if (abs(twist.theta) < min_theta_velocity_threshold_) {
+    twist_thresholded.theta = 0;
+  }
+  return twist_thresholded;
 }
 
 void ControllerServer::speedLimitCallback(const nav2_msgs::msg::SpeedLimit::SharedPtr msg)
 {
-  ControllerMap::iterator it;
-  for (it = controllers_.begin(); it != controllers_.end(); ++it) {
-    it->second->setSpeedLimit(msg->speed_limit, msg->percentage);
+  if (msg->speed_limit > 0 && msg->speed_limit <= 100) {
+    setSpeedLimit(msg->speed_limit / 100.0);
+  } else {
+    RCLCPP_WARN(
+      get_logger(),
+      "Speed limit (%f) is invalid, it must be between 0 and 100.", msg->speed_limit);
   }
 }
 
+void ControllerServer::limitTwist(std::shared_ptr<geometry_msgs::msg::Twist> twist)
+{
+  double factor = speed_limit_ / 100.0;
+  twist->linear.x = twist->linear.x * factor;
+  twist->linear.y = twist->linear.y * factor;
+  twist->angular.z = twist->angular.z * factor;
+}
+
 rcl_interfaces::msg::SetParametersResult
-ControllerServer::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters)
+ControllerServer::dynamicParametersCallback(std::vector<rcl_interfaces::msg::Parameter> parameters)
 {
   rcl_interfaces::msg::SetParametersResult result;
 
-  for (auto parameter : parameters) {
+  for (auto parameter : get_parameters(parameters)) {
     const auto & type = parameter.get_type();
     const auto & name = parameter.get_name();
-
-    // If we are trying to change the parameter of a plugin we can just skip it at this point
-    // as they handle parameter changes themselves and don't need to lock the mutex
-    if (name.find('.') != std::string::npos) {
-      continue;
-    }
-
-    if (!dynamic_params_lock_.try_lock()) {
-      RCLCPP_WARN(
-        get_logger(),
-        "Unable to dynamically change Parameters while the controller is currently running");
-      result.successful = false;
-      result.reason =
-        "Unable to dynamically change Parameters while the controller is currently running";
-      return result;
-    }
-
     if (type == ParameterType::PARAMETER_DOUBLE) {
       if (name == "controller_frequency") {
         controller_frequency_ = parameter.as_double();
@@ -663,8 +673,6 @@ ControllerServer::dynamicParametersCallback(std::vector<rclcpp::Parameter> param
         failure_tolerance_ = parameter.as_double();
       }
     }
-
-    dynamic_params_lock_.unlock();
   }
 
   result.successful = true;
@@ -673,9 +681,4 @@ ControllerServer::dynamicParametersCallback(std::vector<rclcpp::Parameter> param
 
 }  // namespace nav2_controller
 
-#include "rclcpp_components/register_node_macro.hpp"
-
-// Register the component with class_loader.
-// This acts as a sort of entry point, allowing the component to be discoverable when its library
-// is being loaded into a running process.
 RCLCPP_COMPONENTS_REGISTER_NODE(nav2_controller::ControllerServer)

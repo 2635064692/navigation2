@@ -237,6 +237,8 @@ protected:
   std::string dwb_plugin_name_;
 
   bool short_circuit_trajectory_evaluation_;
+
+  rclcpp::Time last_critic_stats_log_time_{0, 0, RCL_ROS_TIME};
 };
 
 }  // namespace dwb_core
