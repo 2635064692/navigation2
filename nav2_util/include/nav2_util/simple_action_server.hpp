@@ -228,14 +228,14 @@ public:
       std::lock_guard<std::recursive_mutex> lock(update_mutex_);
 
       if (stop_execution_) {
-        warn_msg("Stopping the thread per request.");
+        warn_msg("[ABORT_TRACE] work(): stop_execution requested, terminating all.");
         terminate_all();
         completion_callback_();
         break;
       }
 
       if (is_active(current_handle_)) {
-        warn_msg("Current goal was not completed successfully.");
+        warn_msg("[ABORT_TRACE] work(): computeControl returned but goal still active - not completed successfully.");
         terminate(current_handle_);
         completion_callback_();
       }

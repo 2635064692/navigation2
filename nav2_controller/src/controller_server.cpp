@@ -433,6 +433,7 @@ void ControllerServer::computeControl()
     return;
   }
 
+  RCLCPP_WARN(get_logger(), "[ABORT_TRACE] Path-10: computeControl while-loop exited. Reached goal check next.");
   RCLCPP_DEBUG(get_logger(), "Controller succeeded, setting result");
 
   if (publish_zero_velocity_) {
