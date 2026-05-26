@@ -376,19 +376,24 @@ void ControllerServer::computeControl()
     if (findGoalCheckerId(gc_name, current_goal_checker)) {
       current_goal_checker_ = current_goal_checker;
     } else {
-      action_server_->terminate_current();
       RCLCPP_ERROR(get_logger(), "[ABORT_TRACE] Path-2: goal_checker_id '%s' not found", gc_name.c_str());
+      action_server_->terminate_current();
       return;
     }
 
-    setPlannerPath(action_server_->get_current_goal()->path);
+    auto path = action_server_->get_current_goal()->path;
+    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] setPlannerPath: poses=%zu frame=%s",
+      path.poses.size(), path.header.frame_id.c_str());
+    setPlannerPath(path);
     progress_checker_->reset();
 
     last_valid_cmd_time_ = now();
+    int loop_count = 0;
     rclcpp::WallRate loop_rate(controller_frequency_);
     while (rclcpp::ok()) {
+      loop_count++;
       if (action_server_ == nullptr || !action_server_->is_server_active()) {
-        RCLCPP_WARN(get_logger(), "[ABORT_TRACE] Path-9: Action server inactive, exiting computeControl");
+        RCLCPP_WARN(get_logger(), "[ABORT_TRACE] Path-9: Action server inactive after %d loops", loop_count);
         return;
       }
 
@@ -401,13 +406,24 @@ void ControllerServer::computeControl()
 
       // Don't compute a trajectory until costmap is valid (after clear costmap)
       rclcpp::Rate r(100);
+      int costmap_wait = 0;
       while (!costmap_ros_->isCurrent()) {
+        costmap_wait++;
         r.sleep();
+        if (costmap_wait % 100 == 0) {
+          RCLCPP_WARN(get_logger(), "[CTRL_TRACE] loop#%d: waiting for costmap current (%ds)...", loop_count, costmap_wait / 100);
+        }
       }
+
+      RCLCPP_WARN(get_logger(), "[CTRL_TRACE] loop#%d: preempt=%s",
+        loop_count,
+        action_server_->is_preempt_requested() ? "YES" : "NO");
 
       updateGlobalPath();
 
+      RCLCPP_WARN(get_logger(), "[CTRL_TRACE] loop#%d: calling computeAndPublishVelocity", loop_count);
       computeAndPublishVelocity();
+      RCLCPP_WARN(get_logger(), "[CTRL_TRACE] loop#%d: computeAndPublishVelocity done", loop_count);
 
       if (isGoalReached()) {
         RCLCPP_INFO(get_logger(), "Reached the goal!");
@@ -433,7 +449,7 @@ void ControllerServer::computeControl()
     return;
   }
 
-  RCLCPP_WARN(get_logger(), "[ABORT_TRACE] Path-10: computeControl while-loop exited. Reached goal check next.");
+  RCLCPP_WARN(get_logger(), "[ABORT_TRACE] Path-10: computeControl while-loop exited normally");
   RCLCPP_DEBUG(get_logger(), "Controller succeeded, setting result");
 
   if (publish_zero_velocity_) {
@@ -470,10 +486,15 @@ void ControllerServer::computeAndPublishVelocity()
   geometry_msgs::msg::PoseStamped pose;
 
   if (!getRobotPose(pose)) {
+    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] getRobotPose FAILED");
     throw nav2_core::PlannerException("Failed to obtain robot pose");
   }
+  RCLCPP_WARN(get_logger(), "[CTRL_TRACE] robot pose: (%.3f, %.3f) frame=%s",
+    pose.pose.position.x, pose.pose.position.y, pose.header.frame_id.c_str());
 
-  if (!progress_checker_->check(pose)) {
+  bool progress_ok = progress_checker_->check(pose);
+  RCLCPP_WARN(get_logger(), "[CTRL_TRACE] progress_checker: %s", progress_ok ? "OK" : "FAILED");
+  if (!progress_ok) {
     throw nav2_core::PlannerException("Failed to make progress");
   }
 
@@ -481,6 +502,7 @@ void ControllerServer::computeAndPublishVelocity()
 
   geometry_msgs::msg::TwistStamped cmd_vel_2d;
 
+  RCLCPP_WARN(get_logger(), "[CTRL_TRACE] calling DWB computeVelocityCommands...");
   try {
     cmd_vel_2d =
       controllers_[current_controller_]->computeVelocityCommands(
@@ -488,7 +510,11 @@ void ControllerServer::computeAndPublishVelocity()
       nav_2d_utils::twist2Dto3D(twist),
       goal_checkers_[current_goal_checker_].get());
     last_valid_cmd_time_ = now();
+    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] DWB OK: vx=%.3f vy=%.3f vth=%.3f",
+      cmd_vel_2d.twist.linear.x, cmd_vel_2d.twist.linear.y, cmd_vel_2d.twist.angular.z);
   } catch (nav2_core::PlannerException & e) {
+    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] DWB PlannerException: %s  (failure_tolerance=%.1f, elapsed=%.2fs)",
+      e.what(), failure_tolerance_, (now() - last_valid_cmd_time_).seconds());
     if (failure_tolerance_ > 0 || failure_tolerance_ == -1.0) {
       RCLCPP_WARN(this->get_logger(), "%s", e.what());
       cmd_vel_2d.twist.angular.x = 0;
@@ -533,7 +559,10 @@ void ControllerServer::computeAndPublishVelocity()
     nav2_util::geometry_utils::calculate_path_length(current_path_, find_closest_pose_idx());
   action_server_->publish_feedback(feedback);
 
-  RCLCPP_DEBUG(get_logger(), "Publishing velocity at time %.2f", now().seconds());
+  RCLCPP_WARN(get_logger(), "[CTRL_TRACE] publishVelocity: vx=%.3f vth=%.3f  sub_count=%zu activated=%d",
+    cmd_vel_2d.twist.linear.x, cmd_vel_2d.twist.angular.z,
+    vel_publisher_->get_subscription_count(),
+    vel_publisher_->is_activated() ? 1 : 0);
   publishVelocity(cmd_vel_2d);
 }
 
@@ -562,6 +591,8 @@ void ControllerServer::updateGlobalPath()
       action_server_->terminate_current();
       return;
     }
+    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] updateGlobalPath: new path poses=%zu frame=%s",
+      goal->path.poses.size(), goal->path.header.frame_id.c_str());
     setPlannerPath(goal->path);
   }
 }
@@ -677,8 +708,4 @@ ControllerServer::dynamicParametersCallback(std::vector<rclcpp::Parameter> param
 }  // namespace nav2_controller
 
 #include "rclcpp_components/register_node_macro.hpp"
-
-// Register the component with class_loader.
-// This acts as a sort of entry point, allowing the component to be discoverable when its library
-// is being loaded into a running process.
 RCLCPP_COMPONENTS_REGISTER_NODE(nav2_controller::ControllerServer)
