@@ -366,7 +366,6 @@ void ControllerServer::computeControl()
     if (findControllerId(c_name, current_controller)) {
       current_controller_ = current_controller;
     } else {
-      RCLCPP_ERROR(get_logger(), "[ABORT_TRACE] Path-1: controller_id '%s' not found", c_name.c_str());
       action_server_->terminate_current();
       return;
     }
@@ -376,24 +375,18 @@ void ControllerServer::computeControl()
     if (findGoalCheckerId(gc_name, current_goal_checker)) {
       current_goal_checker_ = current_goal_checker;
     } else {
-      RCLCPP_ERROR(get_logger(), "[ABORT_TRACE] Path-2: goal_checker_id '%s' not found", gc_name.c_str());
       action_server_->terminate_current();
       return;
     }
 
     auto path = action_server_->get_current_goal()->path;
-    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] setPlannerPath: poses=%zu frame=%s",
-      path.poses.size(), path.header.frame_id.c_str());
     setPlannerPath(path);
     progress_checker_->reset();
 
     last_valid_cmd_time_ = now();
-    int loop_count = 0;
     rclcpp::WallRate loop_rate(controller_frequency_);
     while (rclcpp::ok()) {
-      loop_count++;
       if (action_server_ == nullptr || !action_server_->is_server_active()) {
-        RCLCPP_WARN(get_logger(), "[ABORT_TRACE] Path-9: Action server inactive after %d loops", loop_count);
         return;
       }
 
@@ -404,52 +397,94 @@ void ControllerServer::computeControl()
         return;
       }
 
+      auto loop_start = std::chrono::steady_clock::now();
+
       // Don't compute a trajectory until costmap is valid (after clear costmap)
+      auto costmap_wait_start = std::chrono::steady_clock::now();
+      size_t costmap_wait_loops = 0;
       rclcpp::Rate r(100);
-      int costmap_wait = 0;
       while (!costmap_ros_->isCurrent()) {
-        costmap_wait++;
         r.sleep();
-        if (costmap_wait % 100 == 0) {
-          RCLCPP_WARN(get_logger(), "[CTRL_TRACE] loop#%d: waiting for costmap current (%ds)...", loop_count, costmap_wait / 100);
-        }
+        costmap_wait_loops++;
       }
+      auto costmap_wait_end = std::chrono::steady_clock::now();
 
-      RCLCPP_WARN(get_logger(), "[CTRL_TRACE] loop#%d: preempt=%s",
-        loop_count,
-        action_server_->is_preempt_requested() ? "YES" : "NO");
-
+      auto update_path_start = std::chrono::steady_clock::now();
       updateGlobalPath();
+      auto update_path_end = std::chrono::steady_clock::now();
 
-      RCLCPP_WARN(get_logger(), "[CTRL_TRACE] loop#%d: calling computeAndPublishVelocity", loop_count);
-      computeAndPublishVelocity();
-      RCLCPP_WARN(get_logger(), "[CTRL_TRACE] loop#%d: computeAndPublishVelocity done", loop_count);
+      VelocityTimingStats vel_stats;
+      computeAndPublishVelocity(&vel_stats);
+      auto compute_vel_end = std::chrono::steady_clock::now();
 
-      if (isGoalReached()) {
+      GoalReachedTimingStats goal_stats;
+      if (isGoalReached(&goal_stats)) {
         RCLCPP_INFO(get_logger(), "Reached the goal!");
         break;
       }
+      auto goal_check_end = std::chrono::steady_clock::now();
 
       if (!loop_rate.sleep()) {
+        auto loop_end = std::chrono::steady_clock::now();
+        double budget_ms = 1000.0 / controller_frequency_;
+        double actual_ms = std::chrono::duration<double, std::milli>(loop_end - loop_start).count();
+        double costmap_ms = std::chrono::duration<double, std::milli>(costmap_wait_end - costmap_wait_start).count();
+        double path_ms = std::chrono::duration<double, std::milli>(update_path_end - update_path_start).count();
+        double vel_ms = std::chrono::duration<double, std::milli>(compute_vel_end - update_path_end).count();
+        double goal_ms = std::chrono::duration<double, std::milli>(goal_check_end - compute_vel_end).count();
+
         RCLCPP_WARN(
-          get_logger(), "Control loop missed its desired rate of %.4fHz",
-          controller_frequency_);
+          get_logger(),
+          "[control_loop_overrun] budget=%.1fms actual=%.1fms "
+          "wait_costmap=%.1fms(%zu polls) update_path=%.1fms "
+          "compute_vel=%.1fms goal_check=%.1fms path_size=%zu",
+          budget_ms, actual_ms,
+          costmap_ms, costmap_wait_loops, path_ms,
+          vel_ms, goal_ms, current_path_.poses.size());
+
+        // Detail breakdown of computeAndPublishVelocity
+        double pose_ms = std::chrono::duration<double, std::milli>(vel_stats.get_robot_pose).count();
+        double prog_ms = std::chrono::duration<double, std::milli>(vel_stats.progress_check).count();
+        double odom_ms = std::chrono::duration<double, std::milli>(vel_stats.odom_lookup).count();
+        double cmd_ms = std::chrono::duration<double, std::milli>(vel_stats.compute_velocity_commands).count();
+        double closest_ms = std::chrono::duration<double, std::milli>(vel_stats.feedback_closest_pose).count();
+        double pathlen_ms = std::chrono::duration<double, std::milli>(vel_stats.feedback_path_length).count();
+        double pub_fb_ms = std::chrono::duration<double, std::milli>(vel_stats.publish_feedback).count();
+        double pub_vel_ms = std::chrono::duration<double, std::milli>(vel_stats.publish_velocity).count();
+
+        RCLCPP_WARN(
+          get_logger(),
+          "[control_loop_overrun.compute_vel] get_pose=%.1fms progress=%.1fms "
+          "odom=%.1fms compute_cmd=%.1fms closest_pose=%.1fms path_len=%.1fms "
+          "pub_feedback=%.1fms pub_vel=%.1fms controller=%s",
+          pose_ms, prog_ms, odom_ms, cmd_ms, closest_ms, pathlen_ms,
+          pub_fb_ms, pub_vel_ms, current_controller_.c_str());
+
+        // Detail breakdown of isGoalReached
+        double gr_pose_ms = std::chrono::duration<double, std::milli>(goal_stats.get_robot_pose).count();
+        double gr_odom_ms = std::chrono::duration<double, std::milli>(goal_stats.odom_lookup).count();
+        double gr_tf_ms = std::chrono::duration<double, std::milli>(goal_stats.transform_end_pose).count();
+        double gr_check_ms = std::chrono::duration<double, std::milli>(goal_stats.goal_check).count();
+
+        RCLCPP_WARN(
+          get_logger(),
+          "[control_loop_overrun.goal_check] get_pose=%.1fms odom=%.1fms "
+          "transform=%.1fms check=%.1fms goal_checker=%s",
+          gr_pose_ms, gr_odom_ms, gr_tf_ms, gr_check_ms,
+          current_goal_checker_.c_str());
       }
     }
-  } catch (nav2_core::PlannerException & e) {
-    RCLCPP_ERROR(this->get_logger(), "[ABORT_TRACE] Path-3/4/5: PlannerException: %s", e.what());
+  } catch (nav2_core::PlannerException &) {
     publishZeroVelocity();
     action_server_->terminate_current();
     return;
-  } catch (std::exception & e) {
-    RCLCPP_ERROR(this->get_logger(), "[ABORT_TRACE] Path-6: std::exception: %s", e.what());
+  } catch (std::exception &) {
     publishZeroVelocity();
     std::shared_ptr<Action::Result> result = std::make_shared<Action::Result>();
     action_server_->terminate_current(result);
     return;
   }
 
-  RCLCPP_WARN(get_logger(), "[ABORT_TRACE] Path-10: computeControl while-loop exited normally");
   RCLCPP_DEBUG(get_logger(), "Controller succeeded, setting result");
 
   if (publish_zero_velocity_) {
@@ -481,28 +516,26 @@ void ControllerServer::setPlannerPath(const nav_msgs::msg::Path & path)
   current_path_ = path;
 }
 
-void ControllerServer::computeAndPublishVelocity()
+void ControllerServer::computeAndPublishVelocity(VelocityTimingStats * timing_stats)
 {
   geometry_msgs::msg::PoseStamped pose;
 
+  auto t0 = std::chrono::steady_clock::now();
   if (!getRobotPose(pose)) {
-    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] getRobotPose FAILED");
     throw nav2_core::PlannerException("Failed to obtain robot pose");
   }
-  RCLCPP_WARN(get_logger(), "[CTRL_TRACE] robot pose: (%.3f, %.3f) frame=%s",
-    pose.pose.position.x, pose.pose.position.y, pose.header.frame_id.c_str());
+  auto t1 = std::chrono::steady_clock::now();
 
-  bool progress_ok = progress_checker_->check(pose);
-  RCLCPP_WARN(get_logger(), "[CTRL_TRACE] progress_checker: %s", progress_ok ? "OK" : "FAILED");
-  if (!progress_ok) {
+  if (!progress_checker_->check(pose)) {
     throw nav2_core::PlannerException("Failed to make progress");
   }
+  auto t2 = std::chrono::steady_clock::now();
 
   nav_2d_msgs::msg::Twist2D twist = getThresholdedTwist(odom_sub_->getTwist());
+  auto t3 = std::chrono::steady_clock::now();
 
   geometry_msgs::msg::TwistStamped cmd_vel_2d;
 
-  RCLCPP_WARN(get_logger(), "[CTRL_TRACE] calling DWB computeVelocityCommands...");
   try {
     cmd_vel_2d =
       controllers_[current_controller_]->computeVelocityCommands(
@@ -510,11 +543,7 @@ void ControllerServer::computeAndPublishVelocity()
       nav_2d_utils::twist2Dto3D(twist),
       goal_checkers_[current_goal_checker_].get());
     last_valid_cmd_time_ = now();
-    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] DWB OK: vx=%.3f vy=%.3f vth=%.3f",
-      cmd_vel_2d.twist.linear.x, cmd_vel_2d.twist.linear.y, cmd_vel_2d.twist.angular.z);
   } catch (nav2_core::PlannerException & e) {
-    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] DWB PlannerException: %s  (failure_tolerance=%.1f, elapsed=%.2fs)",
-      e.what(), failure_tolerance_, (now() - last_valid_cmd_time_).seconds());
     if (failure_tolerance_ > 0 || failure_tolerance_ == -1.0) {
       RCLCPP_WARN(this->get_logger(), "%s", e.what());
       cmd_vel_2d.twist.angular.x = 0;
@@ -534,12 +563,14 @@ void ControllerServer::computeAndPublishVelocity()
       throw nav2_core::PlannerException(e.what());
     }
   }
+  auto t4 = std::chrono::steady_clock::now();
 
   std::shared_ptr<Action::Feedback> feedback = std::make_shared<Action::Feedback>();
   feedback->speed = std::hypot(cmd_vel_2d.twist.linear.x, cmd_vel_2d.twist.linear.y);
 
   // Find the closest pose to current pose on global path
   nav_msgs::msg::Path & current_path = current_path_;
+  auto t5 = std::chrono::steady_clock::now();
   auto find_closest_pose_idx =
     [&pose, &current_path]() {
       size_t closest_pose_idx = 0;
@@ -554,16 +585,29 @@ void ControllerServer::computeAndPublishVelocity()
       }
       return closest_pose_idx;
     };
+  size_t closest_idx = find_closest_pose_idx();
+  auto t6 = std::chrono::steady_clock::now();
 
   feedback->distance_to_goal =
-    nav2_util::geometry_utils::calculate_path_length(current_path_, find_closest_pose_idx());
-  action_server_->publish_feedback(feedback);
+    nav2_util::geometry_utils::calculate_path_length(current_path_, closest_idx);
+  auto t7 = std::chrono::steady_clock::now();
 
-  RCLCPP_WARN(get_logger(), "[CTRL_TRACE] publishVelocity: vx=%.3f vth=%.3f  sub_count=%zu activated=%d",
-    cmd_vel_2d.twist.linear.x, cmd_vel_2d.twist.angular.z,
-    vel_publisher_->get_subscription_count(),
-    vel_publisher_->is_activated() ? 1 : 0);
+  action_server_->publish_feedback(feedback);
+  auto t8 = std::chrono::steady_clock::now();
+
   publishVelocity(cmd_vel_2d);
+  auto t9 = std::chrono::steady_clock::now();
+
+  if (timing_stats) {
+    timing_stats->get_robot_pose = t1 - t0;
+    timing_stats->progress_check = t2 - t1;
+    timing_stats->odom_lookup = t3 - t2;
+    timing_stats->compute_velocity_commands = t4 - t3;
+    timing_stats->feedback_closest_pose = t6 - t5;
+    timing_stats->feedback_path_length = t7 - t6;
+    timing_stats->publish_feedback = t8 - t7;
+    timing_stats->publish_velocity = t9 - t8;
+  }
 }
 
 void ControllerServer::updateGlobalPath()
@@ -575,9 +619,6 @@ void ControllerServer::updateGlobalPath()
     if (findControllerId(goal->controller_id, current_controller)) {
       current_controller_ = current_controller;
     } else {
-      RCLCPP_INFO(
-        get_logger(), "\n[ABORT_TRACE] Path-1(pending): Invalid controller '%s' in pending goal",
-        goal->controller_id.c_str());
       action_server_->terminate_current();
       return;
     }
@@ -585,14 +626,9 @@ void ControllerServer::updateGlobalPath()
     if (findGoalCheckerId(goal->goal_checker_id, current_goal_checker)) {
       current_goal_checker_ = current_goal_checker;
     } else {
-      RCLCPP_INFO(
-        get_logger(), "\n[ABORT_TRACE] Path-2(pending): Invalid goal_checker '%s' in pending goal",
-        goal->goal_checker_id.c_str());
       action_server_->terminate_current();
       return;
     }
-    RCLCPP_WARN(get_logger(), "[CTRL_TRACE] updateGlobalPath: new path poses=%zu frame=%s",
-      goal->path.poses.size(), goal->path.header.frame_id.c_str());
     setPlannerPath(goal->path);
   }
 }
@@ -619,26 +655,39 @@ void ControllerServer::publishZeroVelocity()
   publishVelocity(velocity);
 }
 
-bool ControllerServer::isGoalReached()
+bool ControllerServer::isGoalReached(GoalReachedTimingStats * timing_stats)
 {
   geometry_msgs::msg::PoseStamped pose;
 
+  auto t0 = std::chrono::steady_clock::now();
   if (!getRobotPose(pose)) {
     return false;
   }
+  auto t1 = std::chrono::steady_clock::now();
 
   nav_2d_msgs::msg::Twist2D twist = getThresholdedTwist(odom_sub_->getTwist());
   geometry_msgs::msg::Twist velocity = nav_2d_utils::twist2Dto3D(twist);
+  auto t2 = std::chrono::steady_clock::now();
 
   geometry_msgs::msg::PoseStamped transformed_end_pose;
   rclcpp::Duration tolerance(rclcpp::Duration::from_seconds(costmap_ros_->getTransformTolerance()));
   nav_2d_utils::transformPose(
     costmap_ros_->getTfBuffer(), costmap_ros_->getGlobalFrameID(),
     end_pose_, transformed_end_pose, tolerance);
+  auto t3 = std::chrono::steady_clock::now();
 
-  return goal_checkers_[current_goal_checker_]->isGoalReached(
+  bool reached = goal_checkers_[current_goal_checker_]->isGoalReached(
     pose.pose, transformed_end_pose.pose,
     velocity);
+  auto t4 = std::chrono::steady_clock::now();
+
+  if (timing_stats) {
+    timing_stats->get_robot_pose = t1 - t0;
+    timing_stats->odom_lookup = t2 - t1;
+    timing_stats->transform_end_pose = t3 - t2;
+    timing_stats->goal_check = t4 - t3;
+  }
+  return reached;
 }
 
 bool ControllerServer::getRobotPose(geometry_msgs::msg::PoseStamped & pose)

@@ -15,6 +15,7 @@
 #ifndef NAV2_CONTROLLER__CONTROLLER_SERVER_HPP_
 #define NAV2_CONTROLLER__CONTROLLER_SERVER_HPP_
 
+#include <chrono>
 #include <memory>
 #include <string>
 #include <thread>
@@ -110,6 +111,26 @@ protected:
   using Action = nav2_msgs::action::FollowPath;
   using ActionServer = nav2_util::SimpleActionServer<Action>;
 
+  struct VelocityTimingStats
+  {
+    std::chrono::steady_clock::duration get_robot_pose{};
+    std::chrono::steady_clock::duration progress_check{};
+    std::chrono::steady_clock::duration odom_lookup{};
+    std::chrono::steady_clock::duration compute_velocity_commands{};
+    std::chrono::steady_clock::duration feedback_closest_pose{};
+    std::chrono::steady_clock::duration feedback_path_length{};
+    std::chrono::steady_clock::duration publish_feedback{};
+    std::chrono::steady_clock::duration publish_velocity{};
+  };
+
+  struct GoalReachedTimingStats
+  {
+    std::chrono::steady_clock::duration get_robot_pose{};
+    std::chrono::steady_clock::duration odom_lookup{};
+    std::chrono::steady_clock::duration transform_end_pose{};
+    std::chrono::steady_clock::duration goal_check{};
+  };
+
   // Our action server implements the FollowPath action
   std::unique_ptr<ActionServer> action_server_;
 
@@ -150,7 +171,7 @@ protected:
   /**
    * @brief Calculates velocity and publishes to "cmd_vel" topic
    */
-  void computeAndPublishVelocity();
+  void computeAndPublishVelocity(VelocityTimingStats * timing_stats = nullptr);
   /**
    * @brief Calls setPlannerPath method with an updated path received from
    * action server
@@ -169,7 +190,7 @@ protected:
    * @brief Checks if goal is reached
    * @return true or false
    */
-  bool isGoalReached();
+  bool isGoalReached(GoalReachedTimingStats * timing_stats = nullptr);
   /**
    * @brief Obtain current pose of the robot
    * @param pose To store current pose of the robot
