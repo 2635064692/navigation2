@@ -187,6 +187,7 @@ protected:
   bool rotate_to_goal_heading_, in_rotation_;
   bool closed_loop_;
   bool rotate_to_heading_once_;
+  bool use_path_orientations_;
   double last_angular_vel_ = std::numeric_limits<double>::max();
   geometry_msgs::msg::PoseStamped current_goal_;
 
