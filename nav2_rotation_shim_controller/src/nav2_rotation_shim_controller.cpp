@@ -70,6 +70,8 @@ void RotationShimController::configure(
     node, plugin_name_ + ".rotate_to_goal_heading", rclcpp::ParameterValue(false));
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name_ + ".closed_loop", rclcpp::ParameterValue(true));
+  nav2_util::declare_parameter_if_not_declared(
+    node, plugin_name_ + ".rotate_to_heading_once", rclcpp::ParameterValue(false));
 
   node->get_parameter(plugin_name_ + ".angular_dist_threshold", angular_dist_threshold_);
   node->get_parameter(plugin_name_ + ".angular_disengage_threshold", angular_disengage_threshold_);
@@ -86,6 +88,7 @@ void RotationShimController::configure(
 
   node->get_parameter(plugin_name_ + ".rotate_to_goal_heading", rotate_to_goal_heading_);
   node->get_parameter(plugin_name_ + ".closed_loop", closed_loop_);
+  node->get_parameter(plugin_name_ + ".rotate_to_heading_once", rotate_to_heading_once_);
 
   try {
     primary_controller_ = lp_loader_.createUniqueInstance(primary_controller);
@@ -354,10 +357,33 @@ void RotationShimController::isCollisionFree(
 
 void RotationShimController::setPlan(const nav_msgs::msg::Path & path)
 {
-  path_updated_ = true;
+  path_updated_ = rotate_to_heading_once_ ? isGoalChanged(path) : true;
   current_path_ = path;
   primary_controller_->setPlan(path);
   position_goal_checker_->reset();
+}
+
+bool RotationShimController::isGoalChanged(const nav_msgs::msg::Path & path)
+{
+  if (path.poses.empty()) {
+    return false;
+  }
+
+  const auto & new_goal = path.poses.back();
+  const auto & old = current_goal_.pose;
+  const auto & cur = new_goal.pose;
+
+  if (std::abs(old.position.x - cur.position.x) > 1e-4 ||
+    std::abs(old.position.y - cur.position.y) > 1e-4 ||
+    std::abs(old.orientation.x - cur.orientation.x) > 1e-4 ||
+    std::abs(old.orientation.y - cur.orientation.y) > 1e-4 ||
+    std::abs(old.orientation.z - cur.orientation.z) > 1e-4 ||
+    std::abs(old.orientation.w - cur.orientation.w) > 1e-4)
+  {
+    current_goal_ = new_goal;
+    return true;
+  }
+  return false;
 }
 
 void RotationShimController::setSpeedLimit(const double & speed_limit, const bool & percentage)
@@ -392,6 +418,8 @@ RotationShimController::dynamicParametersCallback(std::vector<rclcpp::Parameter>
         rotate_to_goal_heading_ = parameter.as_bool();
       } else if (name == plugin_name_ + ".closed_loop") {
         closed_loop_ = parameter.as_bool();
+      } else if (name == plugin_name_ + ".rotate_to_heading_once") {
+        rotate_to_heading_once_ = parameter.as_bool();
       }
     }
   }

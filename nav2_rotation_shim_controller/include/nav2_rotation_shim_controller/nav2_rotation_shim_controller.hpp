@@ -155,6 +155,13 @@ protected:
     const geometry_msgs::msg::PoseStamped & pose);
 
   /**
+   * @brief Checks if the goal has changed compared to the stored one
+   * @param path The new path whose last pose is the goal
+   * @return true if goal changed, false otherwise
+   */
+  bool isGoalChanged(const nav_msgs::msg::Path & path);
+
+  /**
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
    */
@@ -179,7 +186,9 @@ protected:
   double control_duration_, simulate_ahead_time_;
   bool rotate_to_goal_heading_, in_rotation_;
   bool closed_loop_;
+  bool rotate_to_heading_once_;
   double last_angular_vel_ = std::numeric_limits<double>::max();
+  geometry_msgs::msg::PoseStamped current_goal_;
 
   // Dynamic parameters handler
   std::mutex mutex_;
