@@ -149,6 +149,7 @@ void ObstaclesCritic::score(CriticData & data)
 
   const size_t traj_len = data.trajectories.x.shape(1);
   bool all_trajectories_collide = true;
+  size_t footprint_check_count = 0;  // footprint collision checks triggered this cycle
   for (size_t i = 0; i < data.trajectories.x.shape(0); ++i) {
     bool trajectory_collide = false;
     float traj_cost = 0.0f;
@@ -157,6 +158,7 @@ void ObstaclesCritic::score(CriticData & data)
 
     for (size_t j = 0; j < traj_len; j++) {
       pose_cost = costAtPose(traj.x(i, j), traj.y(i, j), traj.yaws(i, j));
+      if (pose_cost.using_footprint) {footprint_check_count++;}
       if (pose_cost.cost < 1.0f) {continue;}  // In free space
 
       if (inCollision(pose_cost.cost)) {
@@ -191,6 +193,12 @@ void ObstaclesCritic::score(CriticData & data)
     static_cast<double>(xt::amin(obstacle_cost, immediate)()),
     static_cast<double>(xt::amax(obstacle_cost, immediate)()),
     static_cast<double>(xt::mean(obstacle_cost, immediate)()));
+  RCLCPP_INFO(logger_,
+    "ObstaclesCritic footprint checks: %zu / %zu (consider_footprint=%d, possibly_inscribed_cost=%.1f)",
+    footprint_check_count,
+    data.trajectories.x.shape(0) * traj_len,
+    static_cast<int>(consider_footprint_),
+    static_cast<double>(possibly_inscribed_cost_));
   data.costs += obstacle_cost;
   data.fail_flag = all_trajectories_collide;
 }
