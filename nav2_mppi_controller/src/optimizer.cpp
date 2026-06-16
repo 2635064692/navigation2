@@ -48,6 +48,13 @@ void Optimizer::initialize(
 
   getParams();
 
+  if (publish_debug_vel_) {
+    raw_vel_pub_ = node->create_publisher<geometry_msgs::msg::TwistStamped>(
+      "~/mppi_raw_vel", 1);
+    smoothed_vel_pub_ = node->create_publisher<geometry_msgs::msg::TwistStamped>(
+      "~/mppi_smoothed_vel", 1);
+  }
+
   critic_manager_.on_configure(parent_, name_, costmap_ros_, parameters_handler_);
   noise_generator_.initialize(settings_, isHolonomic(), name_, parameters_handler_);
 
@@ -82,6 +89,8 @@ void Optimizer::getParams()
   getParam(s.retry_attempt_limit, "retry_attempt_limit", 1);
 
   getParam(motion_model_name, "motion_model", std::string("DiffDrive"));
+
+  getParam(publish_debug_vel_, "publish_debug_vel", true);
 
   s.constraints = s.base_constraints;
   setMotionModel(motion_model_name);
@@ -142,8 +151,16 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
     optimize();
   } while (fallback(critics_data_.fail_flag));
 
+  if (publish_debug_vel_ && raw_vel_pub_) {
+    raw_vel_pub_->publish(getControlFromSequenceAsTwist(plan.header.stamp));
+  }
+
   utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
+
+  if (publish_debug_vel_ && smoothed_vel_pub_) {
+    smoothed_vel_pub_->publish(control);
+  }
 
   if (settings_.shift_control_sequence) {
     shiftControlSequence();
