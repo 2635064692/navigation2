@@ -437,6 +437,11 @@ ObstacleLayer::updateBounds(
   // update the global current status
   current_ = current;
 
+  // [DEBUG-DELAY] 本帧计数清零(clearing_obs数/射线数/打点数)
+  dbg_clearing_obs_ = clearing_observations.size();
+  dbg_ray_count_ = 0;
+  dbg_mark_count_ = 0;
+
   // raytrace freespace
   for (unsigned int i = 0; i < clearing_observations.size(); ++i) {
     raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
@@ -507,7 +512,22 @@ ObstacleLayer::updateBounds(
 
       unsigned int index = getIndex(mx, my);
       costmap_[index] = LETHAL_OBSTACLE;
+      // [DEBUG-DELAY] 计打点数
+      ++dbg_mark_count_;
       touch(px, py, min_x, min_y, max_x, max_y);
+    }
+  }
+
+  // [DEBUG-DELAY] 每10帧汇总一次,rolling_window 区分 local(滚窗)/global(静态)
+  {
+    static unsigned int dbg_tick = 0;
+    if (++dbg_tick >= 10) {
+      dbg_tick = 0;
+      RCLCPP_INFO(
+        logger_,
+        "[DBG-DELAY] %s clearing_obs=%u rays=%u marks=%u",
+        rolling_window_ ? "LOCAL" : "GLOBAL",
+        dbg_clearing_obs_, dbg_ray_count_, dbg_mark_count_);
     }
   }
 
@@ -701,6 +721,8 @@ ObstacleLayer::raytraceFreespace(
     unsigned int cell_raytrace_max_range = cellDistance(clearing_observation.raytrace_max_range_);
     unsigned int cell_raytrace_min_range = cellDistance(clearing_observation.raytrace_min_range_);
     MarkCell marker(costmap_, FREE_SPACE);
+    // [DEBUG-DELAY] 计清除射线数(rolling_window 区分 local/global)
+    ++dbg_ray_count_;
     // and finally... we can execute our trace to clear obstacles along that line
     raytraceLine(marker, x0, y0, x1, y1, cell_raytrace_max_range, cell_raytrace_min_range);
 

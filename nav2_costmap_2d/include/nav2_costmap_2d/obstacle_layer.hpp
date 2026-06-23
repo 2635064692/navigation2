@@ -253,6 +253,11 @@ protected:
   bool rolling_window_;
   bool was_reset_;
   int combination_method_;
+
+  // [DEBUG-DELAY] 清除延迟诊断计数(验证后删除)
+  unsigned int dbg_clearing_obs_{0};
+  unsigned int dbg_ray_count_{0};
+  unsigned int dbg_mark_count_{0};
 };
 
 }  // namespace nav2_costmap_2d
