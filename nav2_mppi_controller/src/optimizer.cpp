@@ -151,6 +151,16 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
     optimize();
   } while (fallback(critics_data_.fail_flag));
 
+  RCLCPP_INFO(
+    logger_,
+    "[MPPIOptimizedSeq] vx: min=%.3f max=%.3f avg=%.3f | wz: min=%.3f max=%.3f avg=%.3f",
+    static_cast<double>(xt::amin(control_sequence_.vx, immediate)()),
+    static_cast<double>(xt::amax(control_sequence_.vx, immediate)()),
+    static_cast<double>(xt::mean(control_sequence_.vx, immediate)()),
+    static_cast<double>(xt::amin(control_sequence_.wz, immediate)()),
+    static_cast<double>(xt::amax(control_sequence_.wz, immediate)()),
+    static_cast<double>(xt::mean(control_sequence_.wz, immediate)()));
+
   if (publish_debug_vel_ && raw_vel_pub_) {
     raw_vel_pub_->publish(getControlFromSequenceAsTwist(plan.header.stamp));
   }

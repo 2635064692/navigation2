@@ -120,6 +120,16 @@ public:
    */
   void reset();
 
+  /**
+   * @brief Activate lifecycle publishers
+   */
+  void activate();
+
+  /**
+   * @brief Deactivate lifecycle publishers
+   */
+  void deactivate();
+
 protected:
   /**
    * @brief Main function to generate, score, and return trajectories
