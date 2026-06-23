@@ -151,15 +151,17 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
     optimize();
   } while (fallback(critics_data_.fail_flag));
 
-  RCLCPP_INFO(
-    logger_,
-    "[MPPIOptimizedSeq] vx: min=%.3f max=%.3f avg=%.3f | wz: min=%.3f max=%.3f avg=%.3f",
-    static_cast<double>(xt::amin(control_sequence_.vx, immediate)()),
-    static_cast<double>(xt::amax(control_sequence_.vx, immediate)()),
-    static_cast<double>(xt::mean(control_sequence_.vx, immediate)()),
-    static_cast<double>(xt::amin(control_sequence_.wz, immediate)()),
-    static_cast<double>(xt::amax(control_sequence_.wz, immediate)()),
-    static_cast<double>(xt::mean(control_sequence_.wz, immediate)()));
+  if (parameters_handler_->isVerbose()) {
+    RCLCPP_INFO(
+      logger_,
+      "[MPPIOptimizedSeq] vx: min=%.3f max=%.3f avg=%.3f | wz: min=%.3f max=%.3f avg=%.3f",
+      static_cast<double>(xt::amin(control_sequence_.vx, immediate)()),
+      static_cast<double>(xt::amax(control_sequence_.vx, immediate)()),
+      static_cast<double>(xt::mean(control_sequence_.vx, immediate)()),
+      static_cast<double>(xt::amin(control_sequence_.wz, immediate)()),
+      static_cast<double>(xt::amax(control_sequence_.wz, immediate)()),
+      static_cast<double>(xt::mean(control_sequence_.wz, immediate)()));
+  }
 
   if (publish_debug_vel_ && raw_vel_pub_) {
     raw_vel_pub_->publish(getControlFromSequenceAsTwist(plan.header.stamp));
@@ -413,12 +415,14 @@ void Optimizer::updateControlSequence()
   }
   const double weights_sum_sq = static_cast<double>(xt::sum(softmaxes * softmaxes, immediate)());
   const double effective_samples = weights_sum_sq > 0.0 ? 1.0 / weights_sum_sq : 0.0;
-  RCLCPP_INFO(
-    logger_,
-    "[MPPIWeights] best_traj=%zu best_total=%.6f weight_best=%.6f "
-    "effective_samples=%.6f temperature=%.6f",
-    best, static_cast<double>(costs_(best)), static_cast<double>(softmaxes(best)),
-    effective_samples, static_cast<double>(settings_.temperature));
+  if (parameters_handler_->isVerbose()) {
+    RCLCPP_INFO(
+      logger_,
+      "[MPPIWeights] best_traj=%zu best_total=%.6f weight_best=%.6f "
+      "effective_samples=%.6f temperature=%.6f",
+      best, static_cast<double>(costs_(best)), static_cast<double>(softmaxes(best)),
+      effective_samples, static_cast<double>(settings_.temperature));
+  }
 
   auto && softmaxes_extened = xt::eval(xt::view(softmaxes, xt::all(), xt::newaxis()));
 

@@ -82,6 +82,7 @@ void ObstacleLayer::onInitialize()
   declareParameter("max_obstacle_height", rclcpp::ParameterValue(2.0));
   declareParameter("combination_method", rclcpp::ParameterValue(1));
   declareParameter("observation_sources", rclcpp::ParameterValue(std::string("")));
+  declareParameter("debug_log_enabled", rclcpp::ParameterValue(false));
 
   auto node = node_.lock();
   if (!node) {
@@ -93,6 +94,7 @@ void ObstacleLayer::onInitialize()
   node->get_parameter(name_ + "." + "min_obstacle_height", min_obstacle_height_);
   node->get_parameter(name_ + "." + "max_obstacle_height", max_obstacle_height_);
   node->get_parameter(name_ + "." + "combination_method", combination_method_);
+  node->get_parameter(name_ + "." + "debug_log_enabled", debug_log_enabled_);
   node->get_parameter("track_unknown_space", track_unknown_space);
   node->get_parameter("transform_tolerance", transform_tolerance);
   node->get_parameter(name_ + "." + "observation_sources", topics_string);
@@ -311,6 +313,8 @@ ObstacleLayer::dynamicParametersCallback(
         }
       } else if (param_name == name_ + "." + "footprint_clearing_enabled") {
         footprint_clearing_enabled_ = parameter.as_bool();
+      } else if (param_name == name_ + "." + "debug_log_enabled") {
+        debug_log_enabled_ = parameter.as_bool();
       }
     } else if (param_type == ParameterType::PARAMETER_INTEGER) {
       if (param_name == name_ + "." + "combination_method") {
@@ -519,7 +523,7 @@ ObstacleLayer::updateBounds(
   }
 
   // [DEBUG-DELAY] 每10帧汇总一次,rolling_window 区分 local(滚窗)/global(静态)
-  {
+  if (debug_log_enabled_) {
     static unsigned int dbg_tick = 0;
     if (++dbg_tick >= 10) {
       dbg_tick = 0;

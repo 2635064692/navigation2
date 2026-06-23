@@ -253,6 +253,7 @@ protected:
   bool rolling_window_;
   bool was_reset_;
   int combination_method_;
+  bool debug_log_enabled_{false};
 
   // [DEBUG-DELAY] 清除延迟诊断计数(验证后删除)
   unsigned int dbg_clearing_obs_{0};

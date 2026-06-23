@@ -108,6 +108,11 @@ public:
     return &parameters_change_mutex_;
   }
 
+  bool isVerbose() const
+  {
+    return verbose_;
+  }
+
   /**
     * @brief Set a parameter to a dynamic parameter callback
     * @param name Name of parameter

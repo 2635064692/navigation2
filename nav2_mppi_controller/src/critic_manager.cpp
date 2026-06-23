@@ -93,7 +93,9 @@ void CriticManager::evalTrajectoriesScores(
     for (auto & [name, costs] : per_critic_costs) {
       msg += "\n  " + name + ": " + std::to_string(costs(best));
     }
-    RCLCPP_INFO(logger_, "%s", msg.c_str());
+    if (parameters_handler_->isVerbose()) {
+      RCLCPP_INFO(logger_, "%s", msg.c_str());
+    }
 
     for (auto & [name, costs] : per_critic_costs) {
       float min_cost = costs(0);
@@ -105,11 +107,13 @@ void CriticManager::evalTrajectoriesScores(
         sum_cost += costs(i);
       }
 
-      RCLCPP_INFO(
-        logger_,
-        "[CriticStats] %s: min=%.6f max=%.6f mean=%.6f best=%.6f",
-        name.c_str(), static_cast<double>(min_cost), static_cast<double>(max_cost),
-        sum_cost / static_cast<double>(batch), static_cast<double>(costs(best)));
+      if (parameters_handler_->isVerbose()) {
+        RCLCPP_INFO(
+          logger_,
+          "[CriticStats] %s: min=%.6f max=%.6f mean=%.6f best=%.6f",
+          name.c_str(), static_cast<double>(min_cost), static_cast<double>(max_cost),
+          sum_cost / static_cast<double>(batch), static_cast<double>(costs(best)));
+      }
     }
   }
 }
@@ -128,10 +132,12 @@ void CriticManager::logObstacleCriticScores(
     critic->score(data);
     const float cost = (data.costs - costs_before)(0);
 
-    RCLCPP_INFO(
-      logger_, "[CriticManager] %s %s: %.6f%s",
-      label.c_str(), critic_name.c_str(), static_cast<double>(cost),
-      data.fail_flag ? " | fail=true" : "");
+    if (parameters_handler_->isVerbose()) {
+      RCLCPP_INFO(
+        logger_, "[CriticManager] %s %s: %.6f%s",
+        label.c_str(), critic_name.c_str(), static_cast<double>(cost),
+        data.fail_flag ? " | fail=true" : "");
+    }
 
     data.fail_flag = fail_before;
   }
