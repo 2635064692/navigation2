@@ -259,6 +259,8 @@ protected:
   unsigned int dbg_clearing_obs_{0};
   unsigned int dbg_ray_count_{0};
   unsigned int dbg_mark_count_{0};
+  unsigned int dbg_lethal_cleared_{0};
+  unsigned int dbg_rays_skipped_{0};
 };
 
 }  // namespace nav2_costmap_2d

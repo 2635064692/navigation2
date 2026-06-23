@@ -441,10 +441,12 @@ ObstacleLayer::updateBounds(
   // update the global current status
   current_ = current;
 
-  // [DEBUG-DELAY] 本帧计数清零(clearing_obs数/射线数/打点数)
+  // [DEBUG-DELAY] 本帧计数清零
   dbg_clearing_obs_ = clearing_observations.size();
   dbg_ray_count_ = 0;
   dbg_mark_count_ = 0;
+  dbg_lethal_cleared_ = 0;
+  dbg_rays_skipped_ = 0;
 
   // raytrace freespace
   for (unsigned int i = 0; i < clearing_observations.size(); ++i) {
@@ -527,11 +529,18 @@ ObstacleLayer::updateBounds(
     static unsigned int dbg_tick = 0;
     if (++dbg_tick >= 10) {
       dbg_tick = 0;
+      // 统计地图上当前 LETHAL 格总数
+      unsigned int total_lethal = 0;
+      const unsigned int map_size = size_x_ * size_y_;
+      for (unsigned int i = 0; i < map_size; ++i) {
+        if (costmap_[i] == LETHAL_OBSTACLE) {++total_lethal;}
+      }
       RCLCPP_INFO(
         logger_,
-        "[DBG-DELAY] %s clearing_obs=%u rays=%u marks=%u",
+        "[DBG-DELAY] %s clearing_obs=%u rays=%u skipped=%u marks=%u lethal_cleared=%u total_lethal=%u",
         rolling_window_ ? "LOCAL" : "GLOBAL",
-        dbg_clearing_obs_, dbg_ray_count_, dbg_mark_count_);
+        dbg_clearing_obs_, dbg_ray_count_, dbg_rays_skipped_,
+        dbg_mark_count_, dbg_lethal_cleared_, total_lethal);
     }
   }
 
@@ -719,16 +728,24 @@ ObstacleLayer::raytraceFreespace(
 
     // check for legality just in case
     if (!worldToMap(wx, wy, x1, y1)) {
+      ++dbg_rays_skipped_;
       continue;
     }
 
     unsigned int cell_raytrace_max_range = cellDistance(clearing_observation.raytrace_max_range_);
     unsigned int cell_raytrace_min_range = cellDistance(clearing_observation.raytrace_min_range_);
-    MarkCell marker(costmap_, FREE_SPACE);
+    // [DEBUG-DELAY] 统计 LETHAL→FREE 转换数
+    auto & lethal_cleared_ref = dbg_lethal_cleared_;
+    auto countingMarker = [this, &lethal_cleared_ref](unsigned int offset) {
+      if (costmap_[offset] == LETHAL_OBSTACLE) {
+        ++lethal_cleared_ref;
+      }
+      costmap_[offset] = FREE_SPACE;
+    };
     // [DEBUG-DELAY] 计清除射线数(rolling_window 区分 local/global)
     ++dbg_ray_count_;
     // and finally... we can execute our trace to clear obstacles along that line
-    raytraceLine(marker, x0, y0, x1, y1, cell_raytrace_max_range, cell_raytrace_min_range);
+    raytraceLine(countingMarker, x0, y0, x1, y1, cell_raytrace_max_range, cell_raytrace_min_range);
 
     updateRaytraceBounds(
       ox, oy, wx, wy, clearing_observation.raytrace_max_range_,
