@@ -66,6 +66,26 @@ void Optimizer::shutdown()
   noise_generator_.shutdown();
 }
 
+void Optimizer::activate()
+{
+  if (raw_vel_pub_) {
+    raw_vel_pub_->on_activate();
+  }
+  if (smoothed_vel_pub_) {
+    smoothed_vel_pub_->on_activate();
+  }
+}
+
+void Optimizer::deactivate()
+{
+  if (raw_vel_pub_) {
+    raw_vel_pub_->on_deactivate();
+  }
+  if (smoothed_vel_pub_) {
+    smoothed_vel_pub_->on_deactivate();
+  }
+}
+
 void Optimizer::getParams()
 {
   std::string motion_model_name;
