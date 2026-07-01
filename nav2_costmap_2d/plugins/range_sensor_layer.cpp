@@ -215,6 +215,13 @@ void RangeSensorLayer::bufferIncomingRangeMsg(
   range_message_mutex_.lock();
   range_msgs_buffer_.push_back(*range_message);
   range_message_mutex_.unlock();
+  RCLCPP_INFO_THROTTLE(
+    logger_, *clock_, 5000,
+    "%s: buffered range msg from [%s], range=%.2f, buffer_size=%zu",
+    name_.c_str(),
+    range_message->header.frame_id.c_str(),
+    range_message->range,
+    range_msgs_buffer_.size());
 }
 
 void RangeSensorLayer::updateCostmap()
@@ -225,6 +232,15 @@ void RangeSensorLayer::updateCostmap()
   range_msgs_buffer_copy = std::list<sensor_msgs::msg::Range>(range_msgs_buffer_);
   range_msgs_buffer_.clear();
   range_message_mutex_.unlock();
+
+  if (range_msgs_buffer_copy.empty()) {
+    return;
+  }
+
+  RCLCPP_INFO_THROTTLE(
+    logger_, *clock_, 5000,
+    "%s: processing %zu buffered range msgs in updateCostmap",
+    name_.c_str(), range_msgs_buffer_copy.size());
 
   for (auto & range_msgs_it : range_msgs_buffer_copy) {
     processRangeMessageFunc_(range_msgs_it);
@@ -463,13 +479,19 @@ void RangeSensorLayer::updateBounds(
       (clock_->now() - last_reading_time_).seconds() >
       no_readings_timeout_)
     {
-      RCLCPP_WARN(
-        logger_,
-        "No range readings received for %.2f seconds, while expected at least every %.2f seconds.",
+      RCLCPP_WARN_THROTTLE(
+        logger_, *clock_, 5000,
+        "%s: No range readings received for %.2f seconds, "
+        "while expected at least every %.2f seconds. current_ → false",
+        name_.c_str(),
         (clock_->now() - last_reading_time_).seconds(),
         no_readings_timeout_);
       current_ = false;
     }
+  } else {
+    RCLCPP_DEBUG(
+      logger_, "%s: %u readings processed this cycle, current_=true",
+      name_.c_str(), buffered_readings_);
   }
 }
 
@@ -485,6 +507,8 @@ void RangeSensorLayer::updateCosts(
   unsigned int span = master_grid.getSizeInCellsX();
   unsigned char clear = to_cost(clear_threshold_), mark = to_cost(mark_threshold_);
 
+  unsigned int mark_count = 0, clear_count = 0;
+
   for (int j = min_j; j < max_j; j++) {
     unsigned int it = j * span + min_i;
     for (int i = min_i; i < max_i; i++) {
@@ -495,8 +519,10 @@ void RangeSensorLayer::updateCosts(
         continue;
       } else if (prob > mark) {
         current = nav2_costmap_2d::LETHAL_OBSTACLE;
+        mark_count++;
       } else if (prob < clear) {
         current = nav2_costmap_2d::FREE_SPACE;
+        clear_count++;
       } else {
         it++;
         continue;
@@ -510,6 +536,11 @@ void RangeSensorLayer::updateCosts(
       it++;
     }
   }
+
+  RCLCPP_INFO_THROTTLE(
+    logger_, *clock_, 5000,
+    "%s: updateCosts — mark(LETHAL)=%u, clear(FREE)=%u, buffered_readings=%u",
+    name_.c_str(), mark_count, clear_count, buffered_readings_);
 
   buffered_readings_ = 0;
 
